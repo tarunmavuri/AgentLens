@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* Light Theme Variables */
+.light {
+  --bg-primary: #F5F0EA;
+  --bg-surface: #FFFDFC;
+  --border-color: #EAE3D9;
+  --text-primary: #1D1919;
+  --text-muted: #756D65;
+  --accent-coral: #FF513C;
+  --accent-amber: #F47742;
+}
+
+/* Dark Theme Variables */
+.dark {
+  --bg-primary: #151217;
+  --bg-surface: #201B20;
+  --border-color: #2E2730;
+  --text-primary: #F6F0EB;
+  --text-muted: #9F95A3;
+  --accent-coral: #FF513C;
+  --accent-amber: #F47742;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+.font-editorial {
+  font-family: var(--font-serif);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #332B36;
+  border-radius: 9999px;
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: #D8D0C5;
+  border-radius: 9999px;
+}
+
+/* Pulse animation for active agents */
+@keyframes agentPulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 81, 60, 0.4); }
+  70% { transform: scale(1.02); box-shadow: 0 0 0 10px rgba(255, 81, 60, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 81, 60, 0); }
+}
+
+.agent-active-pulse {
+  animation: agentPulse 2s infinite;
+}
+
