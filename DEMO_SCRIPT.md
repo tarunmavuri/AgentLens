@@ -35,3 +35,4 @@ To demo or verify the platform directly from the terminal:
 ```bash
 python backend/run_goal.py "Benchmark three sorting algorithms on 10,000 items and explain the timings"
 ```
+

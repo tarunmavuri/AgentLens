@@ -40,9 +40,13 @@ htmlcov/
 *.sqlite
 *.sqlite3
 
-# Temporary files
+# Temporary & Reference files
 docx_text.txt
 implementation_plan.txt
+*.docx
+Screenshot *.png
+scratch/
+scratch_*.py
 
 # OS & IDE
 .DS_Store
