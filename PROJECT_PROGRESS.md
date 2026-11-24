@@ -44,6 +44,13 @@
 - **Run-Scoped Memory**: SQLite key-value store isolated per execution.
 - **Fault Injector**: Tool wrapper supporting Break-it modes.
 
+### Phase 1 & Phase 2 Gate Completion (Updated Plan)
+- **Phase 1 Gate Passed**: Tested and demonstrated CLI end-to-end execution script (`backend/run_goal.py`) proving real-time multi-agent orchestration, event logging (21 observable events), plot artifact generation, and Critic evaluations.
+- **EventType Formal Enumeration**: Strictly typed Pydantic `Literal` validating all agent sub-events (`thought`, `tool_call`, `tool_result`, `artifact`, `critique`, `memory_write`), orchestrator lifecycle events, and fault injection events.
+- **CoderLive Diff View**: Built-in Myers-style diff view in `CoderLive.tsx` showing colored additions/deletions between consecutive fix attempts to visualize self-correction.
+- **60-Second Demo Script**: Comprehensive timestamped video recording guide (`DEMO_SCRIPT.md`) covering all 8 observable agentic AI concepts.
+- **ProactorEventLoop Conftest**: Overcame Windows subprocess event loop timeouts in `backend/tests/conftest.py`. Full test suite: 19/19 passing.
+
 ---
 
 ## 2. Files Created or Modified

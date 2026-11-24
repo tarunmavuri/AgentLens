@@ -1,7 +1,7 @@
 import asyncio
 import json
 import time
-from typing import Any, Optional
+from typing import Annotated, Any, Literal, Optional
 from pydantic import BaseModel, Field
 from backend.app.db import get_db_connection
 
@@ -11,11 +11,41 @@ class Usage(BaseModel):
     cost_usd: float = 0.0
     latency_ms: float = 0.0
 
+# Formally enumerated event types. Pydantic validates this at construction.
+EventType = Literal[
+    # Agent sub-events
+    "thought",          # agent reasoning / internal monologue  (concept: react)
+    "tool_call",        # agent invokes a tool                  (concept: tool_use)
+    "tool_result",      # tool returns a result                 (concept: tool_use)
+    "artifact",         # binary output e.g. base64 PNG plot    (concept: tool_use)
+    "critique",         # Critic evaluation verdict             (concept: reflection)
+    "critic_result",    # Critic verdict summary                (concept: evaluation)
+    "memory_write",     # agent wrote to run memory             (concept: memory)
+    "memory_read",      # agent read from run memory            (concept: memory)
+    # Orchestrator lifecycle events
+    "run_started",      # run begins                            (concept: orchestration)
+    "plan_created",     # planner produced a plan               (concept: planning)
+    "task_started",     # a task enters execution               (concept: orchestration)
+    "agent_started",    # an agent begins a task                (concept: orchestration)
+    "retry",            # Critic requested a retry              (concept: reflection)
+    "task_done",        # a task completed                      (concept: orchestration)
+    "agent_finished",   # an agent finished a task              (concept: orchestration)
+    "run_finished",     # run completed successfully            (concept: evaluation)
+    "run_failed",       # run terminated with an error          (concept: orchestration)
+    # Safety / fault injection / budget events
+    "guardrail",        # generic guardrail signal              (concept: guardrails)
+    "guardrail_warning",# approaching budget limits             (concept: guardrails)
+    "fault_injected",   # chaos engineering fault injected     (concept: guardrails)
+    # Catch-all lifecycle helpers
+    "status",           # general status update                 (concept: orchestration)
+    "error",            # non-fatal structured error            (concept: orchestration)
+]
+
 class Event(BaseModel):
     id: int
     run_id: str
     ts: float = Field(default_factory=time.time)
-    type: str
+    type: EventType  # validated against the enum above
     agent_id: str
     agent_category: str = "built_in"  # built_in, custom, system
     task_id: Optional[str] = None
