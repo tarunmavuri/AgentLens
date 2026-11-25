@@ -1,0 +1,16 @@
+{
+  "pythonPath": "C:\\Python314\\python.exe",
+  "pythonVersion": "3.14",
+  "venvPath": ".",
+  "include": [
+    "backend",
+    "frontend"
+  ],
+  "extraPaths": [
+    "."
+  ],
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none",
+  "useLibraryCodeForTypes": true,
+  "typeCheckingMode": "basic"
+}
