@@ -10,6 +10,7 @@ interface AgentNodeData {
   status: 'idle' | 'waiting' | 'planning' | 'running' | 'using_tool' | 'reviewing' | 'retrying' | 'completed' | 'failed';
   currentTaskTitle?: string;
   criticScore?: number;
+  retryCount?: number;
   duration?: number;
   isSelected?: boolean;
 }
@@ -106,6 +107,9 @@ export const CustomAgentNode = memo(({ data }: { data: AgentNodeData }) => {
       {/* Footer Metrics */}
       <div className="pt-2 border-t dark:border-charcoal-border border-cream-border flex items-center justify-between text-[10px] font-mono dark:text-charcoal-muted text-cream-muted">
         <span>{data.duration ? `${data.duration}s` : '0.0s'}</span>
+        {!!data.retryCount && (
+          <span className="font-bold text-amberAccent">Retries: {data.retryCount}</span>
+        )}
         {data.criticScore !== undefined && (
           <span className="font-bold text-coral">Score: {data.criticScore}/10</span>
         )}

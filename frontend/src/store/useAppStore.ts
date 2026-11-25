@@ -1,102 +1,136 @@
 import { create } from 'zustand';
-import { Event, RunSummary, AgentDefinition, ConceptItem, FaultConfig } from '../types';
+import { AgentDefinition, ConceptItem, Event, FaultConfig, RunSummary } from '../types';
 import * as api from '../api/client';
 
-export type ViewType = 'landing' | 'dashboard' | 'workspace' | 'agents' | 'builder' | 'evals' | 'history' | 'settings';
+export type ViewType =
+  | 'landing'
+  | 'dashboard'
+  | 'workspace'
+  | 'agents'
+  | 'builder'
+  | 'evals'
+  | 'history'
+  | 'settings';
 
 interface AppState {
-  // Theme: dark (charcoal/burgundy) or light (warm cream)
   theme: 'dark' | 'light';
   setTheme: (theme: 'dark' | 'light') => void;
   toggleTheme: () => void;
 
-  // View navigation
   currentView: ViewType;
   setView: (view: ViewType) => void;
 
-  // Active runs
   runs: RunSummary[];
+  runsLoading: boolean;
+  runsError: string | null;
   selectedRunId: string | null;
   activeRun: RunSummary | null;
   loadRuns: () => Promise<void>;
-  selectRun: (runId: string) => void;
+  selectRun: (runId: string) => Promise<void>;
 
-  // Live and replay events
   events: Event[];
-  replayCursor: number; // 0 = start, events.length = current
+  replayCursor: number;
   isReplaying: boolean;
-  playbackSpeed: number; // 1x, 2x, 5x
+  playbackSpeed: number;
+  followLive: boolean;
   setReplayCursor: (cursor: number) => void;
   setIsReplaying: (replaying: boolean) => void;
   setPlaybackSpeed: (speed: number) => void;
 
-  // Real-time EventSource connection
   eventSource: EventSource | null;
+  streamError: string | null;
   startLiveRunStream: (runId: string) => void;
   stopLiveRunStream: () => void;
 
-  // Selected agent for inspector
   selectedAgentId: string | null;
   setSelectedAgentId: (id: string | null) => void;
 
-  // Selected concept for Why? panel
   selectedConcept: ConceptItem | null;
   concepts: ConceptItem[];
   loadConcepts: () => Promise<void>;
   selectConceptById: (conceptId: string) => void;
 
-  // Agents registry list
   agents: AgentDefinition[];
+  agentsError: string | null;
   loadAgents: () => Promise<void>;
   editingAgent: AgentDefinition | null;
   setEditingAgent: (agent: AgentDefinition | null) => void;
 
-  // Fault injection / Break-it
   faultConfig: FaultConfig;
   setFaultConfig: (config: FaultConfig) => void;
   resetFaultConfig: () => void;
 }
 
+const TERMINAL_RUN_STATUSES = new Set(['completed', 'completed_with_errors', 'failed']);
+
+function applyTheme(theme: 'dark' | 'light') {
+  const root = document.documentElement;
+  root.classList.toggle('dark', theme === 'dark');
+  root.classList.toggle('light', theme === 'light');
+}
+
+const storedTheme = (localStorage.getItem('agentlens_theme') as 'dark' | 'light') || 'dark';
+applyTheme(storedTheme);
+
 export const useAppStore = create<AppState>((set, get) => ({
-  theme: (localStorage.getItem('agentlens_theme') as 'dark' | 'light') || 'dark',
+  theme: storedTheme,
   setTheme: (theme) => {
     localStorage.setItem('agentlens_theme', theme);
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light');
-    } else {
-      document.documentElement.classList.add('light');
-      document.documentElement.classList.remove('dark');
-    }
+    applyTheme(theme);
     set({ theme });
   },
-  toggleTheme: () => {
-    const next = get().theme === 'dark' ? 'light' : 'dark';
-    get().setTheme(next);
-  },
+  toggleTheme: () => get().setTheme(get().theme === 'dark' ? 'light' : 'dark'),
 
   currentView: 'landing',
   setView: (currentView) => set({ currentView }),
 
   runs: [],
+  runsLoading: false,
+  runsError: null,
   selectedRunId: null,
   activeRun: null,
   loadRuns: async () => {
+    set({ runsLoading: true, runsError: null });
     try {
       const runs = await api.fetchRuns();
-      set({ runs });
-      if (!get().selectedRunId && runs.length > 0) {
-        get().selectRun(runs[0].id);
+      set({ runs, runsLoading: false });
+      const { selectedRunId } = get();
+      if (!selectedRunId && runs.length > 0) {
+        await get().selectRun(runs[0].id);
+      } else if (selectedRunId) {
+        const refreshed = runs.find((run) => run.id === selectedRunId);
+        if (refreshed) set({ activeRun: refreshed });
       }
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      set({
+        runsLoading: false,
+        runsError: error instanceof Error ? error.message : 'Failed to load runs',
+      });
     }
   },
   selectRun: async (runId) => {
     get().stopLiveRunStream();
-    set({ selectedRunId: runId, events: [], replayCursor: 0, isReplaying: false });
-    const run = get().runs.find(r => r.id === runId) || null;
-    set({ activeRun: run });
+    const cached = get().runs.find((run) => run.id === runId) || null;
+    set({
+      selectedRunId: runId,
+      activeRun: cached,
+      events: [],
+      replayCursor: 0,
+      isReplaying: false,
+      streamError: null,
+      followLive: !cached || !TERMINAL_RUN_STATUSES.has(cached.status),
+    });
+
+    if (!cached) {
+      try {
+        const run = await api.fetchRun(runId);
+        set({ activeRun: run, followLive: !TERMINAL_RUN_STATUSES.has(run.status) });
+      } catch (error) {
+        set({
+          streamError: error instanceof Error ? error.message : 'Failed to load run',
+        });
+      }
+    }
     get().startLiveRunStream(runId);
   },
 
@@ -104,45 +138,77 @@ export const useAppStore = create<AppState>((set, get) => ({
   replayCursor: 0,
   isReplaying: false,
   playbackSpeed: 1,
+  followLive: true,
   setReplayCursor: (replayCursor) => set({ replayCursor }),
   setIsReplaying: (isReplaying) => set({ isReplaying }),
   setPlaybackSpeed: (playbackSpeed) => set({ playbackSpeed }),
 
   eventSource: null,
+  streamError: null,
   startLiveRunStream: (runId) => {
     get().stopLiveRunStream();
 
-    const es = new EventSource(`/runs/${runId}/events`);
-    
-    es.onmessage = (e) => {
+    const source = new EventSource(api.streamUrl(runId));
+
+    source.onmessage = (message) => {
+      let event: Event;
       try {
-        const ev: Event = JSON.parse(e.data);
-        set((state) => {
-          // Avoid duplicate events
-          if (state.events.some(x => x.id === ev.id)) return state;
-          const newEvents = [...state.events, ev].sort((a, b) => a.id - b.id);
-          return {
-            events: newEvents,
-            replayCursor: newEvents.length
-          };
-        });
-      } catch (err) {
-        // ignore ping messages
+        event = JSON.parse(message.data) as Event;
+      } catch {
+        return; // keep-alive frames and comments are ignored
+      }
+
+      let finished = false;
+      set((state) => {
+        if (state.events.some((existing) => existing.id === event.id)) return state;
+        const events = [...state.events, event].sort((a, b) => a.id - b.id);
+        finished = event.type === 'run_finished' || event.type === 'run_failed';
+
+        let activeRun = state.activeRun;
+        let runs = state.runs;
+        if (finished) {
+          const status = event.type === 'run_finished'
+            ? (event.payload?.status ?? 'completed')
+            : 'failed';
+          const totals = event.payload?.totals ?? activeRun?.totals;
+          if (activeRun && activeRun.id === runId) {
+            activeRun = { ...activeRun, status: status as any, totals: totals ?? activeRun.totals };
+          }
+          runs = state.runs.map((run) =>
+            run.id === runId
+              ? { ...run, status: status as any, totals: totals ?? run.totals }
+              : run,
+          );
+        }
+
+        return {
+          events,
+          replayCursor: state.followLive ? events.length : state.replayCursor,
+          activeRun,
+          runs,
+          streamError: null,
+        };
+      });
+
+      if (finished) {
+        // The server closes terminal streams; stop the client from reconnecting.
+        source.close();
+        set({ eventSource: null });
       }
     };
 
-    es.onerror = () => {
-      // Reconnection handled automatically by browser EventSource
+    source.onerror = () => {
+      if (source.readyState === EventSource.CLOSED) {
+        set({ eventSource: null, streamError: 'The live event stream closed unexpectedly.' });
+      }
     };
 
-    set({ eventSource: es });
+    set({ eventSource: source });
   },
   stopLiveRunStream: () => {
-    const es = get().eventSource;
-    if (es) {
-      es.close();
-      set({ eventSource: null });
-    }
+    const source = get().eventSource;
+    if (source) source.close();
+    set({ eventSource: null });
   },
 
   selectedAgentId: null,
@@ -152,41 +218,31 @@ export const useAppStore = create<AppState>((set, get) => ({
   concepts: [],
   loadConcepts: async () => {
     try {
-      const concepts = await api.fetchConcepts();
-      set({ concepts });
-    } catch (err) {
-      console.error(err);
+      set({ concepts: await api.fetchConcepts() });
+    } catch (error) {
+      console.error(error);
     }
   },
   selectConceptById: (conceptId) => {
-    const c = get().concepts.find(x => x.id === conceptId) || null;
-    set({ selectedConcept: c });
+    set({ selectedConcept: get().concepts.find((concept) => concept.id === conceptId) || null });
   },
 
   agents: [],
+  agentsError: null,
   loadAgents: async () => {
     try {
-      const agents = await api.fetchAgents();
-      set({ agents });
-    } catch (err) {
-      console.error(err);
+      set({ agents: await api.fetchAgents(), agentsError: null });
+    } catch (error) {
+      set({
+        agentsError: error instanceof Error ? error.message : 'Failed to load agents',
+      });
     }
   },
   editingAgent: null,
   setEditingAgent: (editingAgent) => set({ editingAgent }),
 
-  faultConfig: {
-    enabled: false,
-    target_tool: 'web_search',
-    mode: 'wrong_answer'
-  },
+  faultConfig: { enabled: false, target_tool: 'web_search', mode: 'wrong_answer' },
   setFaultConfig: (faultConfig) => set({ faultConfig }),
-  resetFaultConfig: () => set({
-    faultConfig: {
-      enabled: false,
-      target_tool: 'web_search',
-      mode: 'wrong_answer'
-    }
-  })
+  resetFaultConfig: () =>
+    set({ faultConfig: { enabled: false, target_tool: 'web_search', mode: 'wrong_answer' } }),
 }));
-

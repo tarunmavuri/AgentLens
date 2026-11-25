@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { AgentDefinition } from '../types';
+import { AgentDefinition, AgentExecution } from '../types';
 import { 
   Bot, 
   Plus, 
@@ -14,7 +14,9 @@ import {
   CheckCircle,
   ToggleLeft,
   ToggleRight,
-  Sparkles
+  Sparkles,
+  History,
+  AlertCircle
 } from 'lucide-react';
 import * as api from '../api/client';
 
@@ -25,6 +27,10 @@ export const AgentsPage: React.FC = () => {
   const [testPrompt, setTestPrompt] = useState('Inspect code safety and verify API contract.');
   const [testResult, setTestResult] = useState<any | null>(null);
   const [isTesting, setIsTesting] = useState(false);
+  const [historyAgent, setHistoryAgent] = useState<AgentDefinition | null>(null);
+  const [historyItems, setHistoryItems] = useState<AgentExecution[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   useEffect(() => {
     loadAgents();
@@ -60,7 +66,7 @@ export const AgentsPage: React.FC = () => {
       await loadAgents();
     } catch (err) {
       console.error(err);
-      alert('Cannot delete this agent.');
+      alert(err instanceof Error ? err.message : 'Cannot delete this agent.');
     }
   };
 
@@ -72,9 +78,26 @@ export const AgentsPage: React.FC = () => {
       setTestResult(res);
     } catch (err) {
       console.error(err);
-      alert('Agent test execution failed');
+      alert(err instanceof Error ? err.message : 'Agent test execution failed');
     } finally {
       setIsTesting(false);
+    }
+  };
+
+  const openHistory = async (agent: AgentDefinition) => {
+    setHistoryAgent(agent);
+    setHistoryItems([]);
+    setHistoryError(null);
+    setHistoryLoading(true);
+    try {
+      const response = await api.fetchAgentHistory(agent.agent_id);
+      setHistoryItems(response.executions);
+    } catch (error) {
+      setHistoryError(
+        error instanceof Error ? error.message : 'Failed to load execution history',
+      );
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -213,6 +236,14 @@ export const AgentsPage: React.FC = () => {
 
                 <div className="flex items-center space-x-1.5">
                   <button
+                    onClick={() => openHistory(agent)}
+                    title="View execution history"
+                    className="p-1.5 rounded-lg border dark:border-charcoal-border border-cream-border hover:text-coral transition-colors"
+                  >
+                    <History className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
                     onClick={() => {
                       setTestingAgent(agent);
                       setTestResult(null);
@@ -260,6 +291,92 @@ export const AgentsPage: React.FC = () => {
           );
         })}
       </div>
+
+      {/* Agent Execution History Modal */}
+      {historyAgent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b dark:border-charcoal-border border-cream-border">
+              <div className="flex items-center space-x-2">
+                <History className="w-5 h-5 text-coral" />
+                <h3 className="font-bold text-base">Execution history: {historyAgent.name}</h3>
+              </div>
+              <button
+                onClick={() => setHistoryAgent(null)}
+                className="text-neutral-400 hover:text-neutral-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            {historyLoading && (
+              <p className="text-xs dark:text-charcoal-muted text-cream-muted">
+                Loading executions…
+              </p>
+            )}
+            {historyError && (
+              <div className="p-3 rounded-xl border border-red-500/30 bg-red-500/5 text-red-500 text-xs flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4" />
+                <span>{historyError}</span>
+              </div>
+            )}
+            {!historyLoading && !historyError && historyItems.length === 0 && (
+              <p className="text-xs dark:text-charcoal-muted text-cream-muted">
+                No recorded executions for this agent yet. Run a goal that assigns it a task,
+                or use the isolated test.
+              </p>
+            )}
+
+            {historyItems.length > 0 && (
+              <div className="max-h-80 overflow-y-auto rounded-xl border dark:border-charcoal-border border-cream-border">
+                <table className="w-full text-left text-[11px]">
+                  <thead className="dark:bg-charcoal-bg bg-cream-bg text-[10px] uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">
+                    <tr>
+                      <th className="py-2 px-3">Run / Goal</th>
+                      <th className="py-2 px-3">Task</th>
+                      <th className="py-2 px-3">Status</th>
+                      <th className="py-2 px-3">Thoughts</th>
+                      <th className="py-2 px-3">Tools</th>
+                      <th className="py-2 px-3">Critic</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y dark:divide-charcoal-border divide-cream-border">
+                    {historyItems.map((item, index) => (
+                      <tr key={`${item.run_id}-${item.task_id}-${index}`}>
+                        <td className="py-2 px-3 max-w-[16rem]">
+                          <div className="font-semibold line-clamp-1">{item.goal}</div>
+                          <div className="font-mono text-[9px] dark:text-charcoal-muted text-cream-muted">
+                            {item.run_id}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 font-mono">{item.task_id ?? '—'}</td>
+                        <td className="py-2 px-3">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                              item.status === 'failed'
+                                ? 'bg-red-500/10 text-red-500'
+                                : item.status === 'completed'
+                                ? 'bg-emerald-500/10 text-emerald-500'
+                                : 'bg-coral/10 text-coral'
+                            }`}
+                          >
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 font-mono">{item.thoughts}</td>
+                        <td className="py-2 px-3 font-mono">{item.tool_calls}</td>
+                        <td className="py-2 px-3 font-mono">
+                          {item.critic_score != null ? `${item.critic_score}/10` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Test Agent Modal */}
       {testingAgent && (

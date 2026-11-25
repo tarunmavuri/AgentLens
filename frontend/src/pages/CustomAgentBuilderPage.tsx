@@ -12,8 +12,7 @@ import {
   Cpu, 
   Clock, 
   FileCode,
-  Sliders,
-  CheckCircle2
+  Braces
 } from 'lucide-react';
 import * as api from '../api/client';
 
@@ -25,12 +24,87 @@ export const CustomAgentBuilderPage: React.FC = () => {
   const [role, setRole] = useState(editingAgent?.role || '');
   const [instructions, setInstructions] = useState(editingAgent?.instructions || '');
   const [model, setModel] = useState(editingAgent?.llm_config?.model || 'gemini-2.5-flash');
+  const [models, setModels] = useState<string[]>([
+    'gemini-2.5-flash',
+    'gemini-3-flash-preview',
+    'gemini-3.1-flash-lite',
+  ]);
   const [temperature, setTemperature] = useState(editingAgent?.llm_config?.temperature ?? 0.2);
   const [allowedTools, setAllowedTools] = useState<string[]>(editingAgent?.allowed_tools || []);
   const [maxSteps, setMaxSteps] = useState(editingAgent?.execution_limits?.max_steps ?? 5);
   const [timeoutSeconds, setTimeoutSeconds] = useState(editingAgent?.execution_limits?.timeout_seconds ?? 60);
+  const [outputSchemaText, setOutputSchemaText] = useState(
+    JSON.stringify(
+      editingAgent?.output_schema && Object.keys(editingAgent.output_schema).length > 0
+        ? editingAgent.output_schema
+        : {
+            type: 'object',
+            properties: { summary: { type: 'string' }, score: { type: 'number' } },
+          },
+      null,
+      2,
+    ),
+  );
+  const [schemaError, setSchemaError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [testResult, setTestResult] = useState<any | null>(null);
+
+  const schemaPresets: { label: string; schema: Record<string, unknown> }[] = [
+    {
+      label: 'Summary + score',
+      schema: {
+        type: 'object',
+        properties: { summary: { type: 'string' }, score: { type: 'number' } },
+      },
+    },
+    {
+      label: 'Security audit',
+      schema: {
+        type: 'object',
+        properties: {
+          summary: { type: 'string' },
+          security_score: { type: 'number' },
+          vulnerabilities: { type: 'array' },
+        },
+      },
+    },
+    {
+      label: 'Verification report',
+      schema: {
+        type: 'object',
+        properties: {
+          summary: { type: 'string' },
+          claims: { type: 'array' },
+          factual_accuracy: { type: 'number' },
+        },
+      },
+    },
+  ];
+
+  useEffect(() => {
+    api
+      .fetchConfig()
+      .then((config) => {
+        if (config.allowed_models?.length) setModels(config.allowed_models);
+      })
+      .catch(() => {
+        // Keep the built-in list when /config is unreachable.
+      });
+  }, []);
+
+  const parseOutputSchema = (): Record<string, unknown> | null => {
+    try {
+      const parsed = JSON.parse(outputSchemaText);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        setSchemaError('Output schema must be a JSON object.');
+        return null;
+      }
+      setSchemaError(null);
+      return parsed as Record<string, unknown>;
+    } catch (error) {
+      setSchemaError(error instanceof Error ? error.message : 'Invalid JSON');
+      return null;
+    }
+  };
 
   const availableToolsList = [
     { id: 'web_search', label: 'Web Search', desc: 'Allows agent to search technical papers, literature and live documentation' },
@@ -48,6 +122,8 @@ export const CustomAgentBuilderPage: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !role.trim() || !instructions.trim() || isSubmitting) return;
+    const parsedSchema = parseOutputSchema();
+    if (!parsedSchema) return;
 
     setIsSubmitting(true);
     try {
@@ -58,7 +134,7 @@ export const CustomAgentBuilderPage: React.FC = () => {
         instructions,
         llm_config: { model, temperature },
         allowed_tools: allowedTools,
-        output_schema: { type: 'object', properties: { summary: { type: 'string' }, score: { type: 'number' } } },
+        output_schema: parsedSchema,
         execution_limits: { max_steps: maxSteps, timeout_seconds: timeoutSeconds },
         enabled: true
       };
@@ -73,7 +149,11 @@ export const CustomAgentBuilderPage: React.FC = () => {
       setView('agents');
     } catch (err) {
       console.error(err);
-      alert('Failed to save custom agent. Please check your inputs.');
+      alert(
+        err instanceof Error
+          ? err.message
+          : 'Failed to save custom agent. Please check your inputs.',
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -201,9 +281,13 @@ export const CustomAgentBuilderPage: React.FC = () => {
                   onChange={(e) => setModel(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border text-xs dark:bg-charcoal-bg bg-cream-bg dark:border-charcoal-border border-cream-border"
                 >
-                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast, Recommended)</option>
-                  <option value="gemini-1.5-flash">Gemini 1.5 Flash (High Throughput)</option>
-                  <option value="gemini-1.5-pro">Gemini 1.5 Pro (Deep Reasoning)</option>
+                  {models.map((candidate) => (
+                    <option key={candidate} value={candidate}>
+                      {candidate === 'gemini-2.5-flash'
+                        ? `${candidate} (recommended default)`
+                        : candidate}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -292,6 +376,47 @@ export const CustomAgentBuilderPage: React.FC = () => {
             </div>
           </div>
 
+          {/* SECTION 6: OUTPUT FORMAT */}
+          <div className="p-6 rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border space-y-4">
+            <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-coral">
+              <Braces className="w-4 h-4" />
+              <span>Section 6: Output Format</span>
+            </div>
+
+            <p className="text-[11px] dark:text-charcoal-muted text-cream-muted">
+              The agent's structured output is validated against this JSON Schema. Unknown
+              fields are ignored; primitive properties become typed output fields.
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              {schemaPresets.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => {
+                    setOutputSchemaText(JSON.stringify(preset.schema, null, 2));
+                    setSchemaError(null);
+                  }}
+                  className="px-2.5 py-1 rounded-lg border text-[11px] font-semibold dark:border-charcoal-border border-cream-border hover:border-coral hover:text-coral transition-colors"
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              value={outputSchemaText}
+              onChange={(event) => setOutputSchemaText(event.target.value)}
+              onBlur={parseOutputSchema}
+              rows={8}
+              spellCheck={false}
+              className="w-full px-3.5 py-2.5 rounded-xl border text-[11px] font-mono dark:bg-charcoal-bg bg-cream-bg dark:border-charcoal-border border-cream-border focus:outline-none focus:ring-1 focus:ring-coral"
+            />
+            {schemaError && (
+              <p className="text-[11px] text-red-500 font-mono">Schema error: {schemaError}</p>
+            )}
+          </div>
+
         </div>
 
         {/* Right Pane: Live Configuration Preview */}
@@ -325,6 +450,21 @@ export const CustomAgentBuilderPage: React.FC = () => {
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">Limits:</span>
                 <p className="font-mono text-[11px]">{maxSteps} steps · {timeoutSeconds}s timeout</p>
+              </div>
+
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">Output fields:</span>
+                <p className="font-mono text-[11px]">
+                  {(() => {
+                    try {
+                      const parsed = JSON.parse(outputSchemaText);
+                      const keys = Object.keys(parsed?.properties ?? {});
+                      return keys.length ? keys.join(', ') : 'summary (default)';
+                    } catch {
+                      return 'invalid schema';
+                    }
+                  })()}
+                </p>
               </div>
 
               <div className="pt-4 border-t dark:border-charcoal-border border-cream-border">

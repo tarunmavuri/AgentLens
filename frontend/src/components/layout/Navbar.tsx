@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
-import { Moon, Sun, Layers, Plus, Activity, BookOpen, User } from 'lucide-react';
+import { Moon, Sun, Layers, Plus } from 'lucide-react';
+import { ViewType } from '../../store/useAppStore';
 
 export const Navbar: React.FC = () => {
   const { theme, toggleTheme, currentView, setView, activeRun } = useAppStore();
@@ -97,6 +98,23 @@ export const Navbar: React.FC = () => {
           </button>
         </nav>
 
+        {/* Mobile navigation: the centre links are hidden below md */}
+        <select
+          aria-label="Navigate"
+          value={currentView}
+          onChange={(event) => setView(event.target.value as ViewType)}
+          className="md:hidden ml-auto mr-2 px-2 py-1.5 rounded-lg border text-[11px] font-semibold dark:bg-charcoal-surface dark:border-charcoal-border dark:text-charcoal-text bg-cream-surface border-cream-border text-cream-text max-w-[9rem]"
+        >
+          <option value="landing">Product</option>
+          <option value="dashboard">Dashboard</option>
+          <option value="workspace">Live Graph</option>
+          <option value="agents">Agents</option>
+          <option value="builder">Builder</option>
+          <option value="evals">Evaluations</option>
+          <option value="history">Replay</option>
+          <option value="settings">Settings</option>
+        </select>
+
         {/* Right Controls */}
         <div className="flex items-center space-x-3">
           
@@ -112,7 +130,7 @@ export const Navbar: React.FC = () => {
           </button>
 
           {/* User profile avatar pill */}
-          <div className="flex items-center space-x-2 px-2.5 py-1 rounded-full border dark:border-charcoal-border border-cream-border dark:bg-charcoal-surface bg-cream-surface">
+          <div className="hidden sm:flex items-center space-x-2 px-2.5 py-1 rounded-full border dark:border-charcoal-border border-cream-border dark:bg-charcoal-surface bg-cream-surface">
             <div className="w-6 h-6 rounded-full bg-coral/20 text-coral flex items-center justify-center text-xs font-bold">
               M
             </div>
@@ -127,8 +145,8 @@ export const Navbar: React.FC = () => {
               if (currentView === 'landing') setView('dashboard');
               else setView('workspace');
             }}
-            className="px-4 py-2 rounded-full text-xs font-semibold uppercase tracking-wider 
-              bg-coral hover:bg-coral-hover text-white shadow-md shadow-coral/20 transition-all hover:scale-102 flex items-center space-x-1.5"
+            className="hidden sm:flex px-4 py-2 rounded-full text-xs font-semibold uppercase tracking-wider 
+              bg-coral hover:bg-coral-hover text-white shadow-md shadow-coral/20 transition-all hover:scale-102 items-center space-x-1.5"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Launch Run</span>

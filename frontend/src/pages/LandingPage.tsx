@@ -207,6 +207,9 @@ export const LandingPage: React.FC = () => {
                 </div>
 
                 {/* Footer Live Telemetry Bar */}
+                <div className="pt-3 text-[10px] dark:text-charcoal-muted text-cream-muted">
+                  Illustrative product preview — not live telemetry.
+                </div>
                 <div className="pt-3 border-t dark:border-charcoal-border border-cream-border flex items-center justify-between text-[11px] font-mono dark:text-charcoal-muted text-cream-muted">
                   <span>Tokens: 14,280</span>
                   <span>Cost: $0.0024</span>

@@ -82,40 +82,43 @@ function computeLineDiff(oldText: string, newText: string): DiffLine[] {
 }
 
 export const CoderLive: React.FC<CoderLiveProps> = ({ events }) => {
-  // Extract all coder attempts
+  // Pair each sandbox call with the result that follows it, in event order.
   const attempts: AttemptData[] = useMemo(() => {
-    const coderEvents = events.filter(e => e.agent_id === 'coder');
-    const toolCalls = coderEvents.filter(e => e.type === 'tool_call' && e.payload?.tool === 'python_sandbox');
-    const toolResults = coderEvents.filter(e => e.type === 'tool_result' && (e.payload?.tool === 'python_sandbox' || e.payload?.stdout !== undefined));
-    const allArtifacts = events.filter(e => e.type === 'artifact' && e.payload?.type === 'image/png');
+    const coderEvents = events.filter((event) => event.agent_id === 'coder');
+    const built: AttemptData[] = [];
+    let pendingCall: Event | null = null;
 
-    if (toolCalls.length === 0) {
-      // Check if there is raw code in thought or single tool_call
-      return [];
+    for (const event of coderEvents) {
+      if (event.type === 'tool_call' && event.payload?.tool === 'python_sandbox') {
+        pendingCall = event;
+        continue;
+      }
+
+      if (
+        event.type === 'tool_result' &&
+        pendingCall &&
+        event.payload?.tool === 'python_sandbox'
+      ) {
+        const payload = event.payload ?? {};
+        built.push({
+          attemptNumber: pendingCall.payload?.args?.attempt || built.length + 1,
+          code: pendingCall.payload?.args?.code || '',
+          stdout: payload.stdout || '',
+          stderr: payload.stderr || '',
+          success: payload.success ?? !payload.stderr,
+          durationMs: payload.duration_ms,
+          artifacts: [],
+        });
+        pendingCall = null;
+        continue;
+      }
+
+      if (event.type === 'artifact' && built.length > 0) {
+        built[built.length - 1].artifacts.push(event);
+      }
     }
 
-    return toolCalls.map((call, idx) => {
-      const attemptNum = call.payload?.args?.attempt || (idx + 1);
-      const code = call.payload?.args?.code || '';
-      const result = toolResults[idx] || toolResults[toolResults.length - 1];
-      const stdout = result?.payload?.stdout || (typeof result?.payload?.result === 'string' ? result?.payload?.result : '');
-      const stderr = result?.payload?.stderr || '';
-      const success = result?.payload?.success ?? (stderr.length === 0);
-      const durationMs = result?.payload?.duration_ms;
-
-      // Filter artifacts that appeared around this attempt
-      const attemptArtifacts = idx === toolCalls.length - 1 ? allArtifacts : [];
-
-      return {
-        attemptNumber: attemptNum,
-        code,
-        stdout,
-        stderr,
-        success,
-        durationMs,
-        artifacts: attemptArtifacts,
-      };
-    });
+    return built;
   }, [events]);
 
   const [selectedAttemptIndex, setSelectedAttemptIndex] = useState<number>(0);
