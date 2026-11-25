@@ -111,7 +111,7 @@ graph TD
         Bus[EventBus & SQLite Monotonic Persistence]
     end
 
-    subgraph Layer3["Layer 3: Agent Engine (Pydantic Schemas + Gemini REST)"]
+    subgraph Layer3["Layer 3: Agent Engine (Pydantic Schemas + Gemini API)"]
         Planner[Planner Agent]
         Researcher[Researcher Agent]
         Coder[Coder Agent]
@@ -241,14 +241,14 @@ backend/tests/test_tools.py::test_fault_injection PASSED                   [100%
 
 ---
 
-## 📡 REST API Reference
+## ⚡ FastAPI Endpoints Reference
 
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/api/runs` | Create and trigger a new agent execution run |
 | `GET` | `/api/runs` | List all historical and golden runs |
 | `GET` | `/api/runs/{id}` | Get run summary, status, and financial totals |
-| `GET` | `/api/runs/{id}/events` | Connect to live Server-Sent Events (SSE) event stream |
+| `GET` | `/api/runs/{id}/events` | Connect to live FastAPI Server-Sent Events (SSE) stream |
 | `GET` | `/api/runs/{id}/trace` | Download full deterministic run replay JSON |
 | `GET` | `/api/agents` | List all built-in and active custom agents |
 | `POST` | `/api/agents` | Register a new custom agent |

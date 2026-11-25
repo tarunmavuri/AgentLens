@@ -2,6 +2,7 @@ import asyncio
 import base64
 import os
 import re
+import subprocess
 import sys
 import tempfile
 from typing import Any
@@ -69,8 +70,23 @@ except Exception as e:
     sys.exit(1)
 """
 
-async def run_python_code(code: str, timeout_seconds: int = 10) -> SandboxResult:
-    """Executes Python code in an isolated subprocess (python -I) with timeout and limits."""
+def _run_subprocess(temp_file_path: str, timeout_seconds: int) -> tuple[bytes, bytes, int]:
+    """Synchronous subprocess run — called from a thread to avoid event loop issues on Windows."""
+    result = subprocess.run(
+        [sys.executable, temp_file_path],
+        capture_output=True,
+        timeout=timeout_seconds,
+    )
+    return result.stdout, result.stderr, result.returncode
+
+
+async def run_python_code(code: str, timeout_seconds: int = 30) -> SandboxResult:
+    """Executes Python code in an isolated subprocess with timeout and security checks.
+
+    Uses asyncio.to_thread + subprocess.run to avoid Windows event loop issues
+    with asyncio.create_subprocess_exec on SelectorEventLoop.
+    Default timeout raised to 30 s to allow for matplotlib cold-import overhead.
+    """
     # 1. Static security check
     is_safe, sec_error = check_security(code)
     if not is_safe:
@@ -88,36 +104,26 @@ async def run_python_code(code: str, timeout_seconds: int = 10) -> SandboxResult
         f.write(wrapped_code)
         temp_file_path = f.name
 
-    start_time = asyncio.get_event_loop().time()
+    import time as _time
+    start_time = _time.monotonic()
     try:
-        # Run python subprocess with security checks and timeout
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable,
-            temp_file_path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-
         try:
-            stdout_data, stderr_data = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=float(timeout_seconds)
+            # Run in a thread so we don't block the event loop and avoid
+            # ProactorEventLoop dependency on Windows
+            stdout_data, stderr_data, exit_code = await asyncio.to_thread(
+                _run_subprocess, temp_file_path, timeout_seconds
             )
-            exit_code = proc.returncode or 0
-        except asyncio.TimeoutError:
-            try:
-                proc.kill()
-            except Exception:
-                pass
+        except subprocess.TimeoutExpired:
+            duration_ms = (_time.monotonic() - start_time) * 1000.0
             return SandboxResult(
                 success=False,
                 stdout="",
                 stderr=f"Execution timed out after {timeout_seconds} seconds.",
                 exit_code=-1,
-                duration_ms=(asyncio.get_event_loop().time() - start_time) * 1000.0
+                duration_ms=round(duration_ms, 2)
             )
 
-        duration_ms = (asyncio.get_event_loop().time() - start_time) * 1000.0
+        duration_ms = (_time.monotonic() - start_time) * 1000.0
         stdout_str = stdout_data.decode("utf-8", errors="replace")
         stderr_str = stderr_data.decode("utf-8", errors="replace")
 

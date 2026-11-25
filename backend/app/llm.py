@@ -36,7 +36,7 @@ class LLMClient:
         if not self.api_key or self.api_key.strip() == "":
             return await self._generate_mock(schema, prompt, target_model, start_time, mock_response_generator)
 
-        # Real Gemini REST call
+        # Direct Gemini API generation call
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={self.api_key}"
         
         schema_json = schema.model_json_schema()

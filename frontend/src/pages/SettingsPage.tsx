@@ -65,13 +65,18 @@ export const SettingsPage: React.FC = () => {
       <div className="p-6 rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border space-y-4">
         <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-coral">
           <Cpu className="w-4 h-4" />
-          <span>LLM Provider & Orchestration Engine</span>
+          <span>FastAPI Engine & LLM Architecture</span>
         </div>
 
         <div className="space-y-3 text-xs">
           <div className="flex justify-between py-2 border-b dark:border-charcoal-border border-cream-border">
-            <span className="font-medium">Active Provider:</span>
-            <span className="font-mono font-bold">Google Gemini (REST API)</span>
+            <span className="font-medium">Backend Framework:</span>
+            <span className="font-mono font-bold text-emerald-500">FastAPI (Python asyncio + SSE)</span>
+          </div>
+
+          <div className="flex justify-between py-2 border-b dark:border-charcoal-border border-cream-border">
+            <span className="font-medium">Active LLM Provider:</span>
+            <span className="font-mono font-bold">Google Gemini API</span>
           </div>
 
           <div className="flex justify-between py-2 border-b dark:border-charcoal-border border-cream-border">
