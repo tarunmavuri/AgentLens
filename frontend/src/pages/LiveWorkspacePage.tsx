@@ -308,7 +308,8 @@ export const LiveWorkspacePage: React.FC = () => {
                 }
               />
               <MiniMap
-                nodeColor={theme === 'dark' ? '#3E3443' : '#D5CBC0'}
+                nodeColor={theme === 'dark' ? '#8C7594' : '#B9AB9C'}
+                nodeStrokeColor={theme === 'dark' ? '#FF513C' : '#FF513C'}
                 maskColor={
                   theme === 'dark'
                     ? 'rgba(21, 18, 23, 0.7)'
