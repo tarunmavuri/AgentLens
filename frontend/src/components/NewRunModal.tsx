@@ -67,9 +67,9 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({ isOpen, onClose }) => 
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-base tracking-tight">Initiate AgentLens Execution</h3>
+              <h3 className="font-bold text-base tracking-tight">What should the team work on?</h3>
               <p className="text-xs dark:text-charcoal-muted text-cream-muted">
-                Goal decomposition and collaborative multi-agent orchestration
+                Describe it in one sentence — the Planner splits it into jobs for you.
               </p>
             </div>
           </div>
@@ -87,12 +87,12 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({ isOpen, onClose }) => 
           {/* Goal Input */}
           <div className="space-y-2">
             <label className="block text-xs font-bold uppercase tracking-wider dark:text-charcoal-text text-cream-text">
-              Target Goal or Question
+              Your question
             </label>
             <textarea
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
-              placeholder="E.g., Compare RAG vs fine-tuning for customer support and back it up with code benchmarks..."
+              placeholder="For example: compare two ways to build a support chatbot, and run a small test to see which is cheaper."
               rows={3}
               required
               className="w-full px-4 py-3 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 focus:ring-coral/40
@@ -104,7 +104,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({ isOpen, onClose }) => 
           {/* Quick Showcase Templates */}
           <div className="space-y-2">
             <span className="text-[11px] font-semibold tracking-wider uppercase dark:text-charcoal-muted text-cream-muted">
-              Or Select Verified Showcase Goal:
+              Or try an example:
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {SHOWCASE_GOALS.map((sc, i) => (
@@ -131,7 +131,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({ isOpen, onClose }) => 
               <div className="flex items-center space-x-2">
                 <AlertTriangle className="w-4 h-4 text-amberAccent" />
                 <span className="text-xs font-bold uppercase tracking-wider text-amberAccent">
-                  Break-it: Fault Injection Mode
+                  Break-it mode (optional)
                 </span>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -151,7 +151,8 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({ isOpen, onClose }) => 
             {isBreakItEnabled && (
               <div className="pt-2 border-t dark:border-amber-500/20 border-amber-500/10 space-y-2">
                 <p className="text-[11px] dark:text-charcoal-muted text-cream-muted">
-                  Simulate real-world failure during tool execution to observe Critic detection and automatic self-correction.
+                  Fake a problem on purpose and watch the Critic catch it and send the work back.
+                  Leave this off for a normal run.
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {(['wrong_answer', 'empty', 'garbage', 'timeout'] as const).map((mode) => (
@@ -165,7 +166,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({ isOpen, onClose }) => 
                           : 'dark:border-charcoal-border border-cream-border dark:text-charcoal-muted text-cream-muted'
                       }`}
                     >
-                      {mode.replace('_', ' ')}
+                      {mode === 'wrong_answer' ? 'a wrong answer' : mode}
                     </button>
                   ))}
                 </div>
@@ -189,7 +190,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({ isOpen, onClose }) => 
               className="px-6 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider 
                 bg-coral hover:bg-coral-hover text-white shadow-md shadow-coral/20 transition-all hover:scale-102 disabled:opacity-50"
             >
-              {isSubmitting ? 'Starting...' : 'Start Execution'}
+              {isSubmitting ? 'Starting…' : 'Ask the team'}
             </button>
           </div>
 

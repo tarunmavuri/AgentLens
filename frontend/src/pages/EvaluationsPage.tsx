@@ -87,14 +87,14 @@ export const EvaluationsPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b dark:border-charcoal-border border-cream-border">
         <div>
           <span className="text-[11px] font-bold uppercase tracking-widest text-coral">
-            Quantitative Observability
+            Scores & effort
           </span>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
-            Evaluations & Resource Analytics
+            How well did these runs go?
           </h1>
           <p className="text-xs sm:text-sm dark:text-charcoal-muted text-cream-muted mt-1">
-            Every number here is derived from persisted events, with the orchestrator's
-            recorded totals shown for cross-checking.
+            The Critic's score out of 10, plus how many steps and tokens each run used. Every
+            number comes from the saved steps, so you can check it against the run itself.
           </p>
         </div>
 

@@ -4,6 +4,7 @@ import * as api from '../api/client';
 
 export type ViewType =
   | 'landing'
+  | 'learn'
   | 'dashboard'
   | 'workspace'
   | 'agents'

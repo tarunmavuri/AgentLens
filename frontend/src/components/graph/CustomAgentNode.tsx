@@ -24,41 +24,47 @@ export const CustomAgentNode = memo(({ data }: { data: AgentNodeData }) => {
         return (
           <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-coral text-white animate-pulse">
             <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
-            <span>{data.status.replace('_', ' ')}</span>
+            <span>
+              {data.status === 'using_tool'
+                ? 'Using a tool'
+                : data.status === 'planning'
+                  ? 'Thinking'
+                  : 'Working'}
+            </span>
           </span>
         );
       case 'reviewing':
         return (
           <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-purple-500 text-white">
             <Sparkles className="w-2.5 h-2.5" />
-            <span>Reviewing</span>
+            <span>Checking</span>
           </span>
         );
       case 'retrying':
         return (
           <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-amberAccent text-white animate-bounce">
             <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-            <span>Retrying</span>
+            <span>Trying again</span>
           </span>
         );
       case 'completed':
         return (
           <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
             <CheckCircle2 className="w-2.5 h-2.5" />
-            <span>Done</span>
+            <span>Finished</span>
           </span>
         );
       case 'failed':
         return (
           <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-red-500 text-white">
             <AlertCircle className="w-2.5 h-2.5" />
-            <span>Failed</span>
+            <span>Stuck</span>
           </span>
         );
       default:
         return (
           <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider dark:bg-charcoal-bg bg-cream-bg dark:text-charcoal-muted text-cream-muted border dark:border-charcoal-border border-cream-border">
-            {data.status}
+            {data.status === 'waiting' ? 'Waiting' : 'Not started'}
           </span>
         );
     }
@@ -88,7 +94,7 @@ export const CustomAgentNode = memo(({ data }: { data: AgentNodeData }) => {
           <div>
             <div className="font-bold text-xs tracking-tight">{data.name}</div>
             <div className="text-[10px] dark:text-charcoal-muted text-cream-muted leading-none mt-0.5 font-medium">
-              {data.category}
+              {data.category === 'custom' ? 'Your agent' : 'Built-in'}
             </div>
           </div>
         </div>
@@ -100,13 +106,13 @@ export const CustomAgentNode = memo(({ data }: { data: AgentNodeData }) => {
       <div className="py-2.5 space-y-1.5 text-left">
         <div className="text-[11px] font-semibold text-coral line-clamp-1">{data.role}</div>
         <div className="text-[11px] dark:text-charcoal-muted text-cream-muted line-clamp-2 leading-relaxed">
-          {data.currentTaskTitle ? `Task: ${data.currentTaskTitle}` : 'Waiting for task assignment...'}
+          {data.currentTaskTitle ? `Job: ${data.currentTaskTitle}` : 'Waiting for a job…'}
         </div>
       </div>
 
       {/* Footer Metrics */}
       <div className="pt-2 border-t dark:border-charcoal-border border-cream-border flex items-center justify-between text-[10px] font-mono dark:text-charcoal-muted text-cream-muted">
-        <span>{data.duration ? `${data.duration}s` : '0.0s'}</span>
+        <span>{data.duration ? `${data.duration}s` : '—'}</span>
         {!!data.retryCount && (
           <span className="font-bold text-amberAccent">Retries: {data.retryCount}</span>
         )}

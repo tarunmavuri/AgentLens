@@ -173,10 +173,10 @@ export const CustomAgentBuilderPage: React.FC = () => {
           </button>
           <div>
             <span className="text-[11px] font-bold uppercase tracking-widest text-coral">
-              No-Code Agent Architecture
+              Build an agent
             </span>
             <h1 className="text-2xl font-extrabold tracking-tight">
-              {editingAgent ? `Edit Agent: ${editingAgent.name}` : 'Custom Agent Builder'}
+              {editingAgent ? `Edit agent: ${editingAgent.name}` : 'Create your own helper'}
             </h1>
           </div>
         </div>

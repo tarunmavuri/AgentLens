@@ -1,13 +1,14 @@
 {
   "pythonPath": "C:\\Python314\\python.exe",
   "pythonVersion": "3.14",
-  "venvPath": ".",
   "include": [
     "backend",
     "frontend"
   ],
   "extraPaths": [
-    "."
+    ".",
+    "C:\\Python314\\Lib\\site-packages",
+    "C:\\Users\\bhanu\\AppData\\Roaming\\Python\\Python314\\site-packages"
   ],
   "reportMissingImports": "none",
   "reportMissingModuleSource": "none",

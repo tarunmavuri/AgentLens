@@ -30,13 +30,13 @@ export const SettingsPage: React.FC = () => {
     <div className="p-6 md:p-8 space-y-8 max-w-4xl mx-auto">
       <div className="pb-6 border-b dark:border-charcoal-border border-cream-border">
         <span className="text-[11px] font-bold uppercase tracking-widest text-coral">
-          System Preferences
+          Preferences
         </span>
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
-          Settings & Environment
+          Settings
         </h1>
         <p className="text-xs sm:text-sm dark:text-charcoal-muted text-cream-muted mt-1">
-          Visual theme plus the live backend configuration this browser is talking to.
+          Choose light or dark, and see which backend this browser is connected to.
         </p>
       </div>
 

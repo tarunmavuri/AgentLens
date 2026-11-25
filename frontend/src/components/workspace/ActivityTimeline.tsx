@@ -38,19 +38,19 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({ events }) =>
   const getEventBadge = (type: string) => {
     switch (type) {
       case 'thought':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-500">Thought</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-500">Thinking</span>;
       case 'tool_call':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-coral/10 text-coral">Tool Call</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-coral/10 text-coral">Used a tool</span>;
       case 'tool_result':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-500">Observation</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-500">Got a result</span>;
       case 'critique':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-500">Critique</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-500">Review</span>;
       case 'retry':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amberAccent">Retry</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amberAccent">Trying again</span>;
       case 'artifact':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-pink-500/10 text-pink-500">Artifact</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-pink-500/10 text-pink-500">New file</span>;
       case 'fault_injected':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-red-500/15 text-red-500 font-bold">Fault Injected</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-red-500/15 text-red-500 font-bold">Fake failure</span>;
       default:
         return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider dark:bg-charcoal-bg bg-cream-bg text-neutral-400">{type}</span>;
     }
@@ -62,7 +62,13 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({ events }) =>
       {/* Filter Header */}
       <div className="p-3 border-b dark:border-charcoal-border border-cream-border flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center space-x-1.5 overflow-x-auto text-[11px]">
-          {(['all', 'thought', 'tool', 'critique', 'artifact'] as const).map((ft) => (
+          {([
+            ['all', 'Everything'],
+            ['thought', 'Thinking'],
+            ['tool', 'Tools'],
+            ['critique', 'Reviews'],
+            ['artifact', 'Files'],
+          ] as const).map(([ft, label]) => (
             <button
               key={ft}
               onClick={() => setFilterType(ft)}
@@ -72,13 +78,13 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({ events }) =>
                   : 'dark:hover:bg-charcoal-bg hover:bg-cream-bg dark:text-charcoal-muted text-cream-muted'
               }`}
             >
-              {ft}
+              {label}
             </button>
           ))}
         </div>
 
         <span className="text-[11px] font-mono dark:text-charcoal-muted text-cream-muted">
-          {filteredEvents.length} events logged
+          {filteredEvents.length} steps logged
         </span>
       </div>
 
@@ -86,7 +92,7 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({ events }) =>
       <div className="flex-1 overflow-y-auto divide-y dark:divide-charcoal-border divide-cream-border text-xs">
         {filteredEvents.length === 0 ? (
           <div className="p-8 text-center dark:text-charcoal-muted text-cream-muted">
-            No events recorded yet. Start a run to view real-time agent execution stream.
+            No steps recorded yet. Ask AgentLens something to see the work happen live.
           </div>
         ) : (
           filteredEvents.map((ev) => {
@@ -112,12 +118,12 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({ events }) =>
                     {ev.concept && (
                       <button
                         onClick={() => selectConceptById(ev.concept!)}
-                        title="Click to view Why? architectural rationale"
+                        title="Why does this step exist? Plain-English explanation"
                         className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider 
                           border border-coral/30 text-coral bg-coral/5 hover:bg-coral/15 transition-all"
                       >
                         <BookOpen className="w-2.5 h-2.5" />
-                        <span>Why: {ev.concept}</span>
+                        <span>Why?</span>
                       </button>
                     )}
 
@@ -165,7 +171,7 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({ events }) =>
                   {ev.type === 'artifact' && (
                     <div className="text-xs text-pink-500 font-bold flex items-center space-x-1.5">
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span>Generated Artifact: {ev.payload?.name} ({ev.payload?.type})</span>
+                      <span>New file: {ev.payload?.name} ({ev.payload?.type})</span>
                     </div>
                   )}
                 </div>

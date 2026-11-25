@@ -5,6 +5,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { NewRunModal } from './components/NewRunModal';
 import { WhyModal } from './components/WhyModal';
 import { LandingPage } from './pages/LandingPage';
+import { LearnPage } from './pages/LearnPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LiveWorkspacePage } from './pages/LiveWorkspacePage';
 import { AgentsPage } from './pages/AgentsPage';
@@ -29,6 +30,8 @@ export const App: React.FC = () => {
     switch (currentView) {
       case 'landing':
         return <LandingPage />;
+      case 'learn':
+        return <LearnPage />;
       case 'dashboard':
         return <DashboardPage onOpenNewRun={() => setIsNewRunModalOpen(true)} />;
       case 'workspace':
@@ -48,13 +51,13 @@ export const App: React.FC = () => {
     }
   };
 
-  const isFullPage = currentView === 'landing';
+  const isFullPage = currentView === 'landing' || currentView === 'learn';
 
   return (
     <div className={`min-h-screen transition-colors duration-200 ${theme === 'dark' ? 'dark bg-charcoal-bg text-charcoal-text' : 'light bg-cream-bg text-cream-text'}`}>
       
       {/* Top Navbar */}
-      <Navbar />
+      <Navbar onOpenNewRun={() => setIsNewRunModalOpen(true)} />
 
       {/* Main Container */}
       {isFullPage ? (

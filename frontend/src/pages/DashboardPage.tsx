@@ -10,9 +10,12 @@ import {
   AlertCircle,
   RefreshCw,
   RotateCcw,
+  ArrowRight,
+  BookOpen,
 } from 'lucide-react';
 import * as api from '../api/client';
 import { RunStatus } from '../types';
+import { statusLabel } from '../lib/plain';
 
 interface DashboardPageProps {
   onOpenNewRun: () => void;
@@ -69,7 +72,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : 'Failed to export trace');
+      alert(error instanceof Error ? error.message : 'Could not download the trace');
     } finally {
       setDownloadingTrace(null);
     }
@@ -80,13 +83,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b dark:border-charcoal-border border-cream-border">
         <div>
           <span className="text-[11px] font-bold uppercase tracking-widest text-coral">
-            Command Center
+            My Runs
           </span>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
-            AgentLens Operations Dashboard
+            Everything you've asked AgentLens
           </h1>
           <p className="text-xs sm:text-sm dark:text-charcoal-muted text-cream-muted mt-1">
-            Monitor executions, manage custom agents and audit every persisted event.
+            Each row is one question and how the agent team handled it. Click a row to watch it back.
           </p>
         </div>
 
@@ -96,7 +99,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
               loadRuns();
               loadAgents();
             }}
-            title="Refresh"
+            title="Refresh the list"
             className="p-2.5 rounded-xl border dark:border-charcoal-border border-cream-border dark:hover:bg-charcoal-border hover:bg-cream-border transition-colors"
           >
             <RefreshCw className={`w-4 h-4 ${runsLoading ? 'animate-spin' : ''}`} />
@@ -104,29 +107,45 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
 
           <button
             onClick={() => setView('builder')}
-            className="px-4 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider 
+            className="px-4 py-2.5 rounded-xl text-xs font-semibold
               border dark:border-charcoal-border border-cream-border dark:hover:bg-charcoal-border hover:bg-cream-border transition-colors flex items-center space-x-1.5"
           >
             <Users className="w-3.5 h-3.5" />
-            <span>New Custom Agent</span>
+            <span>Build an agent</span>
           </button>
 
           <button
             onClick={onOpenNewRun}
-            className="px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider 
+            className="px-5 py-2.5 rounded-xl text-xs font-semibold
               bg-coral hover:bg-coral-hover text-white shadow-md shadow-coral/20 transition-all hover:scale-[1.02] flex items-center space-x-2"
           >
             <Sparkles className="w-4 h-4" />
-            <span>Launch Execution</span>
+            <span>Ask AgentLens</span>
           </button>
         </div>
+      </div>
+
+      {/* First-timer orientation */}
+      <div className="rounded-2xl border border-coral/25 bg-coral/5 px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <BookOpen className="w-5 h-5 text-coral flex-shrink-0" />
+        <p className="text-xs sm:text-sm leading-relaxed flex-1">
+          <span className="font-bold">New here?</span> You ask one question; a Planner splits it into
+          small jobs, specialist agents do them, and a Critic scores the result before you see it.
+        </p>
+        <button
+          onClick={() => setView('learn')}
+          className="inline-flex items-center space-x-1 text-xs font-bold text-coral hover:underline whitespace-nowrap"
+        >
+          <span>See how it works</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
       </div>
 
       {runsError && (
         <div className="p-4 rounded-2xl border border-red-500/30 bg-red-500/5 text-red-500 text-xs flex items-start space-x-2">
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="font-bold">Could not load runs</p>
+            <p className="font-bold">Could not load your runs</p>
             <p className="mt-0.5 dark:text-red-400/80">{runsError}</p>
           </div>
         </div>
@@ -136,7 +155,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
         <div className="p-5 rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">
-              Total Runs
+              Runs
             </span>
             <Activity className="w-4 h-4 text-coral" />
           </div>
@@ -144,27 +163,27 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
             {runsLoading && runs.length === 0 ? '—' : totalRuns}
           </div>
           <div className="text-[11px] text-emerald-500 font-medium">
-            {completedRuns} completed successfully
+            {completedRuns} finished without problems
           </div>
         </div>
 
         <div className="p-5 rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">
-              Registered Agents
+              Agents on your team
             </span>
             <Users className="w-4 h-4 text-amberAccent" />
           </div>
           <div className="text-2xl sm:text-3xl font-extrabold">{agents.length}</div>
           <div className="text-[11px] dark:text-charcoal-muted text-cream-muted">
-            {builtInCount} built-in · {Math.max(0, agents.length - builtInCount)} custom
+            {builtInCount} built-in · {Math.max(0, agents.length - builtInCount)} yours
           </div>
         </div>
 
         <div className="p-5 rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">
-              Total Tokens
+              Words processed
             </span>
             <Clock className="w-4 h-4 text-blue-500" />
           </div>
@@ -172,29 +191,29 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
             {totalTokens.toLocaleString()}
           </div>
           <div className="text-[11px] dark:text-charcoal-muted text-cream-muted">
-            Sum of recorded run totals
+            Tokens read and written across all runs
           </div>
         </div>
 
         <div className="p-5 rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">
-              Estimated Cost
+              Estimated cost
             </span>
-            <span className="text-xs font-bold text-coral">$ USD</span>
+            <span className="text-xs font-bold text-coral">USD</span>
           </div>
           <div className="text-2xl sm:text-3xl font-extrabold">${totalCost.toFixed(5)}</div>
-          <div className="text-[11px] text-emerald-500 font-medium">
-            From configurable per-model pricing
+          <div className="text-[11px] dark:text-charcoal-muted text-cream-muted">
+            Based on the published price of each model
           </div>
         </div>
       </div>
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold tracking-tight">Recent Multi-Agent Executions</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-bold tracking-tight">Recent runs</h2>
           <span className="text-xs dark:text-charcoal-muted text-cream-muted">
-            Open in the live graph or scrub the stored trace
+            Click any row to watch it live or replay it
           </span>
         </div>
 
@@ -203,11 +222,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b dark:border-charcoal-border border-cream-border dark:bg-charcoal-bg/60 bg-cream-bg/60 text-[10px] uppercase font-bold tracking-wider dark:text-charcoal-muted text-cream-muted">
-                  <th className="py-3 px-4">Run ID & Goal</th>
+                  <th className="py-3 px-4">What you asked</th>
                   <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Tokens</th>
+                  <th className="py-3 px-4">Words</th>
                   <th className="py-3 px-4">Cost</th>
-                  <th className="py-3 px-4">Duration</th>
+                  <th className="py-3 px-4">Time</th>
                   <th className="py-3 px-4">Critic</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
@@ -215,13 +234,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
               <tbody className="divide-y dark:divide-charcoal-border divide-cream-border">
                 {runs.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={7}
-                      className="py-10 text-center dark:text-charcoal-muted text-cream-muted"
-                    >
+                    <td colSpan={7} className="py-10 text-center dark:text-charcoal-muted text-cream-muted">
                       {runsLoading
-                        ? 'Loading executions…'
-                        : 'No executions recorded yet. Launch one to populate the dashboard.'}
+                        ? 'Loading your runs…'
+                        : 'Nothing here yet. Press “Ask AgentLens” to run your first question.'}
                     </td>
                   </tr>
                 ) : (
@@ -239,7 +255,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
                           {run.goal}
                         </div>
                         <div className="text-[10px] font-mono dark:text-charcoal-muted text-cream-muted mt-0.5">
-                          {run.id} {run.id.includes('golden') && '· recorded demo trace'}
+                          {run.id} {run.id.includes('golden') && '· demo run'}
                         </div>
                       </td>
 
@@ -249,14 +265,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
                             statusClasses[run.status] ?? statusClasses.queued
                           }`}
                         >
-                          {run.status.replace(/_/g, ' ')}
+                          {statusLabel(run.status)}
                         </span>
                       </td>
 
                       <td className="py-3.5 px-4 font-mono text-[11px]">
-                        {(
-                          (run.totals.in_tokens || 0) + (run.totals.out_tokens || 0)
-                        ).toLocaleString()}
+                        {((run.totals.in_tokens || 0) + (run.totals.out_tokens || 0)).toLocaleString()}
                       </td>
 
                       <td className="py-3.5 px-4 font-mono text-[11px]">
@@ -267,7 +281,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
                         {run.totals.duration_seconds ? `${run.totals.duration_seconds}s` : '—'}
                       </td>
 
-                      <td className="py-3.5 px-4 font-bold text-xs text-coral">
+                      <td className="py-3.5 px-4 font-bold text-xs text-coral" title="Average Critic score out of 10">
                         {run.totals.average_critic_score != null
                           ? `${run.totals.average_critic_score}/10`
                           : '—'}
@@ -276,7 +290,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
                       <td className="py-3.5 px-4 text-right space-x-2">
                         <button
                           onClick={(event) => handleExportTrace(run.id, event)}
-                          title="Download JSON trace"
+                          title="Download this run as a JSON file"
                           disabled={downloadingTrace === run.id}
                           className="p-1.5 rounded-lg border dark:border-charcoal-border border-cream-border dark:hover:bg-charcoal-border hover:bg-cream-border transition-colors text-neutral-400 hover:text-coral disabled:opacity-50"
                         >
@@ -288,7 +302,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
                             selectRun(run.id);
                             setView('workspace');
                           }}
-                          title="Open live graph"
+                          title="Watch this run"
                           className="p-1.5 rounded-lg border dark:border-charcoal-border border-cream-border dark:hover:bg-charcoal-border hover:bg-cream-border transition-colors text-neutral-400 hover:text-coral"
                         >
                           <Play className="w-3.5 h-3.5" />
@@ -299,7 +313,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
                             selectRun(run.id);
                             setView('history');
                           }}
-                          title="Replay stored events"
+                          title="Replay this run step by step"
                           className="p-1.5 rounded-lg border dark:border-charcoal-border border-cream-border dark:hover:bg-charcoal-border hover:bg-cream-border transition-colors text-neutral-400 hover:text-coral"
                         >
                           <RotateCcw className="w-3.5 h-3.5" />

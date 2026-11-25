@@ -82,13 +82,14 @@ export const ReplayPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b dark:border-charcoal-border border-cream-border">
         <div>
           <span className="text-[11px] font-bold uppercase tracking-widest text-coral">
-            Event-Sourced Replay Engine
+            Replay
           </span>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
-            Historical Replay & Trace Inspection
+            Watch a finished run again
           </h1>
           <p className="text-xs sm:text-sm dark:text-charcoal-muted text-cream-muted mt-1">
-            Scrub through persisted events. Replay never re-invokes a model.
+            Move through a saved run one step at a time, like a video. Nothing is re-run, so this
+            costs nothing.
           </p>
         </div>
 

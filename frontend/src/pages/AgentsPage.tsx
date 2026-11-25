@@ -108,13 +108,14 @@ export const AgentsPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b dark:border-charcoal-border border-cream-border">
         <div>
           <span className="text-[11px] font-bold uppercase tracking-widest text-coral">
-            Agent Registry & Ecosystem
+            Your team
           </span>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
-            Agent Workspace
+            Meet your agents
           </h1>
           <p className="text-xs sm:text-sm dark:text-charcoal-muted text-cream-muted mt-1">
-            Manage built-in specialists and dynamically registered custom AI agents.
+            Each agent has one clear job. Built-in agents come with AgentLens; the ones you build
+            show up here too.
           </p>
         </div>
 
