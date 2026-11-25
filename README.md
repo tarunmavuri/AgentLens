@@ -1,270 +1,285 @@
 <div align="center">
 
-# 🔍 AgentLens
-### The Glass-Box Multi-Agent Orchestration & AI Observability Platform
+# AgentLens
 
-**Build your own AI agent teams. Watch them collaborate. Understand, evaluate, and improve every execution.**
+### The glass-box multi-agent platform
 
-[![CI / Test Suite](https://img.shields.io/badge/pytest-19%20passed%20(100%25)-emerald?style=for-the-badge&logo=pytest)](backend/tests/)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.2%2B-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
-[![License: MIT](https://img.shields.io/badge/License-MIT-amber.svg?style=for-the-badge)](LICENSE)
+**Build your own AI agent teams. Watch them collaborate. Understand every execution.**
 
-[Key Features](#-key-features) • [Quickstart (30s)](#-quickstart-in-30-seconds) • [Architecture](#-system-architecture) • [The 8 Core Concepts](#-the-8-core-architectural-concepts-why-panel) • [Coder Live & Diffs](#-coder-live--self-correction-diffs) • [Demo Script](DEMO_SCRIPT.md)
+![Backend tests](https://img.shields.io/badge/backend%20tests-51%20passed-2ea44f?style=for-the-badge)
+![Frontend build](https://img.shields.io/badge/frontend%20build-passing-2ea44f?style=for-the-badge)
+![Python](https://img.shields.io/badge/Python-3.10%E2%80%933.14-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
 
 </div>
 
 ---
 
-## 💡 The Core Problem: The Agent "Black Box"
+AgentLens runs a team of LLM agents on one goal, then shows you exactly what happened: the plan, every tool call, every observation, every critic verdict, every retry, and what it cost. Runs are event-sourced in SQLite and streamed to the browser over SSE, so a trace can be replayed byte-for-byte without calling a model again.
 
-Most agent frameworks (**LangChain**, **CrewAI**, **AutoGen**, **LangGraph**) operate as opaque black boxes. When agents stall, hallucinate, fail sandbox runs, or burn tokens in infinite loops, developers are left with cryptic tracebacks and no structured explanation.
-
-**AgentLens replaces guesswork with total transparency.**
-
-Every step in an AgentLens run produces a structured, monotonically sequenced, typed event stored in SQLite and streamed via Server-Sent Events (SSE) to a live DAG visualization interface.
-
-```
-Goal ──► [Planner] ──► [Task 1: Researcher] ──► [Task 2: Coder] ──► [Critic] ──► Complete Output
-             │                 │                      │                ▲
-             ▼                 ▼                      ▼                │
-       Plan Created       Search Query           Subprocess &        Verdict:
-        (JSON DAG)         (Tavily/DDG)           Plot Artifact      Accept / Retry
-```
+- **Hand-rolled orchestrator** — no LangGraph, no LangChain, no MCP. The state machine is auditable Python.
+- **Built-in agents** — Planner, Researcher, Coder, Critic.
+- **Custom agents** — configured in the UI (role, instructions, model, tool permissions, output schema, limits), stored in SQLite, registered dynamically, and assigned work by the Planner alongside built-in agents.
+- **Real Gemini integration** — structured JSON output validated with Pydantic, token/latency/cost accounting, repair pass on invalid JSON, retry with backoff, and model fallback when a model is unavailable or out of quota.
+- **Live execution graph** — nodes and edges are derived from persisted events, never from frontend timers.
 
 ---
 
-## ⚡ Key Features
-
-| Capability | What It Does | Why It Matters |
-|---|---|---|
-| **Hand-Rolled State Machine** | Zero LangGraph / LangChain dependencies; ~300 lines of auditable Python state machine logic. | Complete deterministic control; no framework bloat or hidden prompt injections. |
-| **Custom Agent Builder** | No-code UI to configure agents (instructions, models, allowed tools, schemas). | Extends the system dynamically; Planner immediately incorporates custom agents. |
-| **Coder Live Panel** | Syntax-highlighted code, live stdout/stderr, and inline base64 matplotlib plots. | Real-time visibility into Python code execution and generated figures. |
-| **Self-Correction Diff View** | Myers-style line diff between consecutive failed & corrected code attempts. | Visually proves whether agent self-healing actually improved the code. |
-| **Break-It Chaos Engineering** | Inject intermittent tool faults (`timeout`, `empty`, `wrong_answer`, `garbage`). | Evaluates agent resilience and tests Critic retry loops under realistic stress. |
-| **Code-Enforced Guardrails** | Hard programmatic limits on steps (25), tokens (60k), runtime (120s), tool timeouts (10s). | Prevents runaway billing loops in code, not just prompt requests. 80% warning alerts. |
-| **Real-Time Financial Telemetry** | Exact per-step and run-level token counts, latency (ms), and cost tracking ($USD). | Complete financial observability down to fractions of a cent. |
-| **Zero-Key Golden Runs** | 2 pre-seeded showcase runs committed in SQLite for instant offline replay. | Test and demo the platform immediately without needing an API key. |
-
----
-
-## 🚀 Quickstart in 30 Seconds
-
-### Option A: Run from the CLI (Instant Demo)
-
-Run a complete multi-agent workflow directly in your terminal with colored live telemetry:
+## Quickstart
 
 ```bash
-# Clone the repository
-git clone https://github.com/tarunmavuri/AgentLens.git
-cd AgentLens
-
-# Install backend dependencies
+git clone <your-fork> AgentLens && cd AgentLens
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-
-# Execute a goal with the CLI orchestrator
-python backend/run_goal.py "Benchmark three sorting algorithms on 10,000 items and explain the timings"
+cp .env.example .env        # optional: add GEMINI_API_KEY
 ```
 
-*Runs 100% offline out-of-the-box using the built-in simulation engine, generating 20+ observable events and a sandbox plot artifact.*
+Backend:
 
----
-
-### Option B: Run Full-Stack Web Application
-
-#### 1. Start the Backend API
 ```bash
-# From project root
 uvicorn backend.app.main:app --reload --port 8000
 ```
-*API interactive documentation available at `http://localhost:8000/docs`*
 
-#### 2. Start the Frontend UI
+Frontend (second terminal):
+
 ```bash
 cd frontend
 npm install
-npm run dev
-```
-*Open `http://localhost:3000` to access the AgentLens workspace.*
-
----
-
-## 🏛️ System Architecture
-
-```mermaid
-graph TD
-    subgraph Layer1["Layer 1: Frontend (React 18 + TypeScript + Vite)"]
-        UI[Workspace Dashboard]
-        Graph[React Flow Dynamic DAG]
-        CoderView[Coder Live & Diff View]
-        Inspector[Agent Inspector & Timeline]
-        Builder[Custom Agent Builder UI]
-    end
-
-    subgraph Layer2["Layer 2: Backend & Orchestration (FastAPI + Asyncio)"]
-        SSE[SSE Stream /runs/id/events]
-        SM[Hand-Rolled State Machine Orchestrator]
-        Guard[Guardrail Manager: Step, Token, Time Budgets]
-        Bus[EventBus & SQLite Monotonic Persistence]
-    end
-
-    subgraph Layer3["Layer 3: Agent Engine (Pydantic Schemas + Gemini API)"]
-        Planner[Planner Agent]
-        Researcher[Researcher Agent]
-        Coder[Coder Agent]
-        Critic[Critic Agent]
-        Custom[Dynamic Custom Agent Runner]
-    end
-
-    subgraph Layer4["Layer 4: Modular Tools & Execution Layer"]
-        Search[Web Search: Tavily / DuckDuckGo]
-        Sandbox[Python Subprocess Sandbox + Matplotlib Extractor]
-        Mem[Run-Scoped SQLite Key-Value Memory]
-        Faults[FaultInjector: Break-It Chaos Testing]
-    end
-
-    UI -->|HTTP / SSE| SSE
-    SSE --> Bus
-    SM --> Bus
-    SM --> Guard
-    SM --> Planner
-    SM --> Researcher
-    SM --> Coder
-    SM --> Custom
-    SM --> Critic
-    Researcher --> Search
-    Researcher --> Mem
-    Coder --> Sandbox
-    Custom --> Search
-    Custom --> Mem
-    Sandbox -.-> Faults
-    Search -.-> Faults
+npm run dev            # http://localhost:3000
 ```
 
----
+The Vite dev server proxies `/runs`, `/agents`, `/tools`, `/config`, `/concepts` and `/health` to `127.0.0.1:8000`, so no `VITE_API_URL` is needed locally.
 
-## ⚡ The 8 Core Architectural Concepts (Why? Panel)
-
-AgentLens exposes an educational and architectural **"Why?"** panel mapping system behavior directly to core agentic design patterns:
-
-| Concept | Architectural Implementation in AgentLens |
-|---|---|
-| **1. ReAct Pattern** | Agents alternate between internal reasoning (`thought`), environment action (`tool_call`), and observation (`tool_result`), adapting dynamically to unexpected outputs. |
-| **2. Task Planning** | The **Planner Agent** parses unstructured user goals into an executable DAG of sub-tasks (max 5) with deterministic success criteria and explicit dependencies. |
-| **3. Sandboxed Tool Use** | Tools are registered in a modular registry. The **Python Sandbox** runs code in isolated subprocesses with restricted imports (`subprocess`, `os.system` blocked), 10s timeouts, and 10 KB caps. |
-| **4. Reflection & Retries** | The **Critic Agent** evaluates finished tasks against explicit criteria, assigns scores (0–10), and triggers automated feedback-directed retries (up to 2). |
-| **5. Orchestration State Machine** | A handwritten async state machine manages agent handoffs, task lifecycle states, and SSE fan-out without external framework lock-in. |
-| **6. Run-Scoped Memory** | Isolated key-value working memory allows downstream agents (e.g. Coder) to access research gathered by upstream agents (e.g. Researcher) without cross-run contamination. |
-| **7. Code-Enforced Guardrails** | Budgets (max 25 steps, 60,000 tokens, 120 seconds) are checked programmatically on every state transition. Automatic warning events emit at 80% usage. |
-| **8. Multi-Dimensional Eval** | Real-time telemetry records latency (ms), token volume, dollar cost, Critic scores, and tool error rates to quantify execution efficiency. |
-
----
-
-## 💻 Coder Live & Self-Correction Diffs
-
-When programming tasks run, the **Coder Agent** executes scripts inside an isolated Python subprocess sandbox.
-
-If an execution fails (syntax error, runtime error, or failing assertion), the Coder analyzes the stderr and attempts an automated fix (up to 3 attempts).
-
-### The CoderLive Panel (`CoderLive.tsx`) provides:
-1. **Split-Screen Execution:** Code script on the left, execution terminal (stdout/stderr) and latency on the right.
-2. **Inline Plot Rendering:** Headless matplotlib figures are captured directly from memory, converted to base64 PNGs, and rendered as inline `artifact` events.
-3. **Myers-Style Diff View:** Toggle the **Diff View** tab to inspect a colored line-by-line comparison between consecutive attempts:
-   - <span style="color:#ef4444">**Red (-)**</span>: Faulty or buggy code lines removed.
-   - <span style="color:#10b981">**Green (+)**</span>: Corrected lines introduced during self-correction.
-
----
-
-## 🛠️ The Agent Suite
-
-### 1. Planner Agent
-- Interprets user goal and decomposes it into smaller sequential tasks.
-- Supports dynamic registration: assigns tasks to built-in agents OR registered custom agents.
-- Defines deterministic success criteria for each task.
-
-### 2. Researcher Agent
-- Formulates optimized search queries.
-- Primary provider: **Tavily Search API**; Fallback: **DuckDuckGo**.
-- Summarizes findings, extracts citations, and writes key data to run-scoped memory.
-
-### 3. Coder Agent
-- Writes Python code to fulfill technical requirements and benchmarks.
-- Runs inside isolated subprocesses with execution timeout and import safety checks.
-- Generates data visualizations with matplotlib and emits base64 `artifact` events.
-- Performs up to 3 fix attempts upon execution failure.
-
-### 4. Critic Agent
-- Evaluates task output against initial success criteria.
-- Scores execution quality from 0 to 10.
-- Issues verdicts: `accept` or `retry` (max 2 retries per task) with structured diagnostic guidance.
-
-### 5. Custom Agent Engine
-- Users can create new agents in the **Custom Agent Builder**.
-- Configurable role, system instructions, model, tool permissions, and execution limits.
-- Evaluated and scored by the Critic exactly like built-in agents.
-
----
-
-## 📊 Comprehensive Test Suite
-
-AgentLens includes a full test suite verifying every component from sandbox security to end-to-end chaos orchestration:
+### Run one goal from the CLI
 
 ```bash
-python -m pytest backend/tests -v
+python backend/run_goal.py "Benchmark three sorting algorithms on 10,000 items and explain the timings"
 ```
+
+The CLI seeds the registry, streams every event, and exits non-zero unless the stored run actually finished. Add `--mock` to force offline simulation.
+
+### Offline simulation
+
+With **no** `GEMINI_API_KEY`, runs use a deterministic simulation so the UI, replay and tests work without credentials. Those runs are labelled `llm_mode: "offline_simulation"` and cost `$0`. A configured key never silently degrades to simulation: provider failures surface as `LLMError` and appear in the run as `task_failed` / `run_failed` events.
+
+---
+
+## Configuration
+
+All settings are environment variables; see `.env.example` for the full list.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `GEMINI_API_KEY` | — | Enables live Gemini calls. Server-side only. |
+| `DEFAULT_MODEL` | `gemini-2.5-flash` | Model used when an agent does not specify one. |
+| `ALLOWED_MODELS` | current Gemini text models | Allowlist enforced for every request, including custom agents. |
+| `MODEL_FALLBACK_MODELS` | `gemini-3-flash-preview, gemini-3.1-flash-lite, gemini-3.5-flash` | Tried in order on 404/429/503 after retries; a model that failed is skipped for 10 minutes. Usage records the model that answered. |
+| `TAVILY_API_KEY` | — | Search provider; falls back to DuckDuckGo. |
+| `DB_PATH` | `agentlens.db` | SQLite file (WAL mode). |
+| `CORS_ORIGINS` | `*` | Comma-separated browser origins. Set explicit origins in production. |
+| `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` | 30 / 60 | Per-IP limit on `POST /runs` and agent test endpoints. |
+| `SANDBOX_TIMEOUT_SECONDS` | 20 | Hard wall-clock limit per Python execution. |
+| `MAX_STEPS_DEFAULT` / `MAX_TOKENS_DEFAULT` / `MAX_SECONDS_DEFAULT` | 25 / 60000 / 300 | Guardrail budgets per run. |
+| `MODEL_PRICING_JSON` | — | Overrides the built-in $/million-token price table. |
+
+`GET /config` exposes the non-secret subset (mode, default/allowed models, limits, pricing) and powers the Settings screen.
+
+---
+
+## Architecture
+
+```
+Goal
+  │
+  ▼
+Planner ──► Plan (tasks, dependencies, assigned agents)
+  │
+  ▼
+Orchestrator (hand-rolled state machine)
+  ├─ resolves dependency order, timeouts, guardrails
+  ├─ dispatches any registered agent through one contract
+  ├─ Critic evaluates each output; bounded retries with feedback
+  ├─ persists every event before streaming it
+  └─ composes a deterministic final answer from stored results
+  │
+  ▼
+SQLite (runs, events, agents, memory)  ──►  SSE /runs/{id}/events
+                                            ├─ Last-Event-ID resume
+                                            ├─ metrics derived from events
+                                            └─ full JSON trace export
+```
+
+| Layer | Location |
+|---|---|
+| FastAPI app, CORS, rate limiting, error shape | `backend/app/main.py`, `middleware.py` |
+| Orchestrator | `backend/app/orchestrator.py` |
+| Event model, bus, SSE ordering | `backend/app/events.py` |
+| Agent contract, registry, built-ins, custom runner | `backend/app/agents/` |
+| LLM client, retries, fallback, repair | `backend/app/llm.py` |
+| Pricing | `backend/app/pricing.py` |
+| Tools: sandbox, search, memory, faults | `backend/app/tools/` |
+| Routes: runs, agents, tools | `backend/app/routes/` |
+| React app, store, pages, graph, Coder Live | `frontend/src/` |
+
+### Agent contract
+
+Every agent — built-in or custom — is an `AgentDefinition` with the same fields and runs through `run_agent_task()`:
 
 ```text
-backend/tests/test_agents.py::test_registry_built_in_agents PASSED         [ 5%]
-backend/tests/test_agents.py::test_custom_agent_crud PASSED                [10%]
-backend/tests/test_agents.py::test_cannot_delete_builtin_agent PASSED      [15%]
-backend/tests/test_api.py::test_health_check PASSED                        [21%]
-backend/tests/test_api.py::test_concepts PASSED                            [26%]
-backend/tests/test_api.py::test_list_runs_and_golden_runs PASSED           [31%]
-backend/tests/test_api.py::test_create_and_get_run PASSED                  [36%]
-backend/tests/test_api.py::test_export_trace PASSED                        [42%]
-backend/tests/test_api.py::test_agents_crud_and_test PASSED                [47%]
-backend/tests/test_api.py::test_tools_endpoints PASSED                     [52%]
-backend/tests/test_orchestrator.py::test_orchestrator_end_to_end PASSED    [57%]
-backend/tests/test_orchestrator.py::test_orchestrator_with_chaos PASSED    [63%]
-backend/tests/test_tools.py::test_sandbox_execution PASSED                 [68%]
-backend/tests/test_tools.py::test_sandbox_security PASSED                  [73%]
-backend/tests/test_tools.py::test_sandbox_timeout PASSED                   [78%]
-backend/tests/test_tools.py::test_sandbox_matplotlib_artifact PASSED       [84%]
-backend/tests/test_tools.py::test_web_search PASSED                        [89%]
-backend/tests/test_tools.py::test_run_memory PASSED                        [94%]
-backend/tests/test_tools.py::test_fault_injection PASSED                   [100%]
-============================== 19 passed in 35.9s ==============================
+agent_id, name, description, role, instructions
+llm_config{model, temperature}
+allowed_tools[]        # enforced server-side per call
+output_schema          # JSON Schema; becomes a validated Pydantic model
+execution_limits{max_steps, timeout_seconds}
+agent_type             # built_in | custom
+enabled
 ```
 
+Agent results carry structured output, a summary, timing, and the model actually used. The Planner is given the live registry (enabled agents only) and may assign any of them, so mixed built-in/custom workflows work without code changes. The offline simulator assigns matching security/test/verification agents to dependent tasks so those workflows can be exercised without a key.
+
+### Events
+
+`Event` fields: `id` (monotonic per run), `run_id`, `ts`, `type`, `agent_id`, `agent_category`, `task_id`, `payload`, `concept`, `usage`. Event types cover `run_started`, `plan_created`, `task_started`, `agent_started`, `thought`, `tool_call`, `tool_result`, `artifact`, `critique`, `retry`, `memory_read`, `memory_write`, `task_done`, `task_failed`, `final_answer`, `run_finished`, `run_failed`, and fault/guardrail events.
+
+SSE frames are `id: N` + `data: {...}`, with `retry: 3000`. The endpoint subscribes before replaying persisted events, supports `Last-Event-ID` / `last_event_id`, closes on terminal events, and keeps events available after a client disconnects. Replay and trace export read stored events only.
+
+Agent "thoughts" are deliberately short decision summaries; raw chain-of-thought is not stored or shown.
+
 ---
 
-## ⚡ FastAPI Endpoints Reference
+## Custom agents
 
-| Method | Endpoint | Description |
+Create, edit, duplicate, enable/disable, delete and test agents from the UI or the API.
+
+- Configurations persist in SQLite and register immediately.
+- Disabled agents are rejected by the test endpoint and excluded from plans.
+- Tool permissions are checked on the server for every tool call (not in the browser).
+- Every execution emits the same events as built-in agents, so custom agents appear in the graph, timeline, metrics and history.
+- `GET /agents/{id}/history` lists that agent's recorded executions (run, task, status, counts, critic score).
+- Output schemas are JSON Schema objects edited in the builder; the runtime turns them into Pydantic models and the offline simulator fills declared fields.
+
+No arbitrary user Python is uploaded or executed as agent code. Custom agents are configuration only. MCP is intentionally out of scope for this release.
+
+---
+
+## API
+
+| Method | Endpoint | Purpose |
 |---|---|---|
-| `POST` | `/api/runs` | Create and trigger a new agent execution run |
-| `GET` | `/api/runs` | List all historical and golden runs |
-| `GET` | `/api/runs/{id}` | Get run summary, status, and financial totals |
-| `GET` | `/api/runs/{id}/events` | Connect to live FastAPI Server-Sent Events (SSE) stream |
-| `GET` | `/api/runs/{id}/trace` | Download full deterministic run replay JSON |
-| `GET` | `/api/agents` | List all built-in and active custom agents |
-| `POST` | `/api/agents` | Register a new custom agent |
-| `DELETE`| `/api/agents/{id}` | Delete a custom agent (built-in agents are protected) |
-| `POST` | `/api/agents/{id}/test` | Execute an isolated sandbox test of a custom agent |
-| `GET` | `/api/tools` | Discover available tools, parameters, and categories |
-| `GET` | `/api/concepts` | Retrieve educational explanations of the 8 core concepts |
+| `POST` | `/runs` | Create and start a run (`goal`, optional guardrail/fault config). Rate limited. |
+| `GET` | `/runs` | List runs (most recent first). |
+| `GET` | `/runs/{id}` | Run summary + totals. |
+| `GET` | `/runs/{id}/events` | SSE stream (resumable). |
+| `GET` | `/runs/{id}/metrics` | Per-run and per-agent metrics derived from events: tokens, cost, latency, steps, tool calls, retries, critic scores, budget. |
+| `GET` | `/runs/{id}/trace` | Full JSON trace (no secrets). |
+| `GET` | `/agents` | List agents (`agent_type`, `enabled_only`). |
+| `POST` / `PUT` / `DELETE` | `/agents`, `/agents/{id}` | CRUD (built-ins protected from deletion). |
+| `POST` | `/agents/{id}/duplicate`, `/agents/{id}/toggle` | Clone or enable/disable. |
+| `GET` | `/agents/{id}/history` | Recent executions of one agent. |
+| `POST` | `/agents/{id}/test` | Isolated single-agent test. Disabled and system agents are rejected; rate limited. |
+| `GET` | `/tools`, `/tools/{name}` | Tool registry metadata. |
+| `GET` | `/config` | Public configuration and pricing. |
+| `GET` | `/concepts`, `/health` | Educational concept list, liveness. |
+
+Errors use stable status codes (`400` validation, `404` missing, `409` conflict, `429` rate limit) and never include API keys or stack traces.
 
 ---
 
-## 🎬 60-Second Demo Video Walkthrough
+## Evaluation and cost
 
-Looking to record or inspect a demo of AgentLens? See the complete step-by-step click-path script in [DEMO_SCRIPT.md](DEMO_SCRIPT.md).
+`/runs/{id}/metrics` and the Evaluations screen are computed from persisted events, not from frontend estimates:
+
+- input/output tokens, model, latency per call (from each event's `usage`),
+- estimated cost via the configurable price table,
+- steps (action events only), tool calls, retries, critic scores,
+- guardrail consumption versus limits,
+- per-agent breakdown.
+
+Golden demo runs are pre-seeded from their stored events and labelled `recorded_demo`; they are never presented as live telemetry. Unknown models are priced with the table's `default` entry, so treat cost as an estimate and verify rates with your provider.
 
 ---
 
-## 📄 License
+## Security model
 
-Distributed under the **MIT License**. Free for academic, personal, and commercial engineering use.
+- **API keys** live only in backend environment variables. They are never returned by `/config`, trace export, logs or the browser bundle.
+- **Input validation** via Pydantic models on every route; agent definitions are validated (tool names, model allowlist, schema shape, limits).
+- **Prompt injection**: retrieved web content and custom instructions are agent-level context only. They cannot change platform system instructions, guardrails, tool permissions or allowlists, which are enforced in code.
+- **Tool permissions** are checked server-side for built-in and custom agents.
+- **Memory isolation**: memory rows are keyed by `run_id`; agents can only read/write the current run.
+- **Rate limiting** per client IP on expensive POST routes.
+- **Sandbox** (`backend/app/tools/sandbox.py`), defence in depth:
+  1. static rejection of obvious escapes,
+  2. a child interpreter in a throwaway directory with a stripped environment,
+  3. an in-child CPython audit hook that blocks process creation, sockets, network requests and writes/deletes outside the sandbox,
+  4. POSIX resource limits (CPU, address space, file size, open files) and a wall-clock timeout that kills the process group,
+  5. output caps and parent-side plot extraction.
+- **Remaining limitations** (documented honestly):
+  - This is process isolation, not a container/VM boundary. Untrusted multi-tenant code needs gVisor, Firecracker or a hosted sandbox such as Piston.
+  - `rlimits` are POSIX-only; on Windows the timeout and audit hook are the enforced layers.
+  - The audit hook is enforced by CPython; a memory-corruption exploit in a native extension is out of scope for it.
+  - The API is single-tenant and unauthenticated by design. Put it behind an authenticated proxy before exposing it publicly.
+
+---
+
+## Tests
+
+```bash
+python -m pytest backend/tests -q
+```
+
+Current result: **51 passed** (~3 minutes on Windows; most time is real sandbox execution and search timeouts in offline runs).
+
+Coverage includes: LLM client (retries, repair, fallback, offline labelling), pricing, sandbox execution/security/timeout/plot artifact, search unavailable handling, fault injection, memory isolation, registry CRUD/validation, agent contract, orchestrator end-to-end, dependency ordering, graceful task failure, guardrails, Break-it recovery, SSE resume, trace export, metrics, rate limiting, custom-agent API validation, and five showcase scenarios (research, coding artifact, custom fact-checker, security+testing agents, replay determinism) in `backend/tests/test_scenarios.py`.
+
+Tests isolate state: `backend/tests/conftest.py` points `DB_PATH` at a temp directory, clears `GEMINI_API_KEY`, enables offline simulation, disables rate limits and shortens search timeouts.
+
+There is no frontend unit-test suite; the frontend is verified by `tsc` + `vite build`. Do not treat the build as a functional test of interactions.
+
+---
+
+## Deployment
+
+### Backend on Render
+
+`render.yaml` is ready: Python 3.12, health check on `/health`, and a 1 GB disk mounted at `/var/data` with `DB_PATH=/var/data/agentlens.db`.
+
+- Set `GEMINI_API_KEY` and, optionally, `TAVILY_API_KEY` in the Render dashboard.
+- Set `CORS_ORIGINS` to the exact Vercel origin (for example `https://agentlens.vercel.app`). Do not leave `*` in production.
+- SQLite must be on the persistent disk. **Without a disk (or on a free instance that does not offer one), every deploy/restart loses runs, agents and traces.** For multi-instance or long-term production use, migrate the storage layer to PostgreSQL; the event-sourced schema maps directly (runs, events, agents, memory).
+- The container is not a hardened sandbox host: if you allow untrusted users, move code execution to a VM-based runner.
+
+### Frontend on Vercel
+
+- Root directory: `frontend`. Build: `npm run build`. Output: `dist` (see `frontend/vercel.json`, which also rewrites SPA routes to `index.html`).
+- Set `VITE_API_URL=https://<your-render-service>` in Vercel's environment variables; the client appends `/runs`, `/agents`, etc.
+- Redeploy after changing the backend URL so the value is baked into the bundle.
+
+Never commit `.env`; `.env.example` contains placeholders only.
+
+---
+
+## Project layout
+
+```
+backend/
+  app/
+    agents/       base contract, registry, planner, researcher, coder, critic, custom runner
+    routes/       runs (incl. SSE, metrics, trace), agents (incl. history, test), tools
+    tools/        sandbox, search, memory, faults, registry
+    config.py db.py events.py llm.py orchestrator.py guardrails.py pricing.py middleware.py
+  tests/          51 tests including showcase scenarios
+  run_goal.py     CLI smoke test / demo
+frontend/
+  src/            api, components, pages, store, types
+  vite.config.ts  dev proxy
+render.yaml       Render blueprint
+```
+
+## Roadmap (not in this release)
+
+MCP integration, external agent APIs, more LLM providers, parallel task execution, richer evaluation suites, PostgreSQL storage, containerized sandboxing.
+
+## License
+
+MIT.

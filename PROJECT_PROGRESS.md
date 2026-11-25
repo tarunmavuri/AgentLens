@@ -139,3 +139,30 @@
 - Subprocess sandbox isolation is restricted using import denylisting and timeouts suitable for single-tenant local/sandbox execution. For multi-tenant public production environments, document swapping to containerized sandboxes (e.g. Piston or gVisor) as noted in architecture docs.
 - Golden traces guarantee immediate offline usability for demonstrations without requiring a live Gemini API key.
 
+
+---
+
+## 5. Continuation Engineering Pass (`freebuff-continuation`, Nov 25 2026)
+
+Independent audit and hardening after the original Antigravity session.
+
+### Backend corrections
+- LLM failures now raise `LLMError`; no silent mock fallback. Offline simulation only when no key, labelled `llm_mode=offline_simulation`.
+- Model allowlist is enforced plus configurable fallback models (404/429/503), with a 10-minute unhealthy-model cache; usage records the model that actually answered.
+- Gemini calls retry with backoff, repair invalid JSON once, and record tokens/latency/cost per call.
+- Orchestrator charges the step budget only for action events, emits a deterministic `final_answer`, isolates task failures (`task_failed` + `completed_with_errors`), and supports dependency ordering, retries and per-agent timeouts.
+- All agents (built-in and custom) share `run_agent_task()`; custom agents read upstream memory, enforce tool permissions server-side and emit standard events/metrics.
+- Event schema supports dynamic agent IDs; SSE resumed via `Last-Event-ID`/`last_event_id`, subscribes before replay, closes on terminal events; replay never re-invokes a model.
+- Added `/runs/{id}/metrics`, `/agents/{id}/history`, `/config`; rate limiting on POST `/runs` and agent tests; stable error shape.
+- Search never fabricates sources (explicit `status: unavailable` record) and caches results for 5 minutes.
+- Sandbox: child process, stripped env, temp cwd, CPython audit hook, POSIX rlimits, timeout, output caps. Limitations documented in README.
+- `run_goal.py` fixed for the new schema, seeds the registry and exit code reflects the stored run status.
+
+### Frontend corrections
+- Real API-driven dashboard, live graph from events, metrics screen with no fabricated fallbacks, replay cursor reset and scrub handling, settings backed by `/config`, agent execution-history modal, builder output-schema editor, mobile navigation, per-attempt Coder Live pairing.
+- Both themes retained (cream/charcoal/coral editorial identity).
+
+### Verification
+- `python -m pytest backend/tests -q` → **51 passed**.
+- `cd frontend && npm run build` → passes (`tsc` + `vite`, 2,192 modules).
+- Live Gemini smoke run (fallback from quota-exhausted `gemini-2.5-flash` to `gemini-3-flash-preview`) → `completed`, 46 events, 17 steps, $0.01434, avg critic 6.6/10.

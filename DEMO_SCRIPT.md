@@ -20,10 +20,10 @@ A step-by-step walkthrough script for a 60-second screen recording showing all 8
 
 ## 🔑 Key Features Demonstrated
 
-1. **Live Event Stream:** Every `thought`, `tool_call`, `tool_result`, `artifact`, `critique`, and `guardrail` is emitted via Server-Sent Events (SSE).
+1. **Live Event Stream:** Every `thought`, `tool_call`, `tool_result`, `artifact`, `critique`, and `guardrail` is persisted in SQLite and emitted via Server-Sent Events (SSE), with `Last-Event-ID` resume.
 2. **Coder Live & Diff View:** Real-time sandbox execution, error capture, inline base64 plot rendering, and Myers-style line diffing of corrections.
 3. **Fault Injection (Break-it):** Deliberate tool failure simulation (timeout, error, empty result) testing agent resilience and Critic retries.
-4. **Zero-API-Key Offline Mode:** 2 cached golden showcase runs (`golden-run-rag-vs-finetuning` and `golden-run-sorting-benchmark`) allow immediate demoing without external API keys.
+4. **Zero-API-Key Demo Mode:** 2 recorded golden showcase runs (`golden-run-rag-vs-finetuning` and `golden-run-sorting-benchmark`) are labelled `recorded_demo`, and a keyless backend runs explicit `offline_simulation` executions.
 5. **Trace Export:** Complete JSON replay artifact exported from `GET /runs/{id}/trace`.
 
 ---
@@ -34,5 +34,6 @@ To demo or verify the platform directly from the terminal:
 
 ```bash
 python backend/run_goal.py "Benchmark three sorting algorithms on 10,000 items and explain the timings"
+# add --mock to force offline simulation; the command exits non-zero on failure
 ```
 

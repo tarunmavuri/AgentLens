@@ -4,15 +4,34 @@ services:
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: 3.12.6
+      - key: APP_ENV
+        value: production
       - key: GEMINI_API_KEY
         sync: false
       - key: TAVILY_API_KEY
         sync: false
       - key: DEFAULT_MODEL
         value: gemini-2.5-flash
+      - key: ALLOWED_MODELS
+        value: gemini-2.5-flash,gemini-2.5-pro,gemini-3-flash-preview,gemini-3.5-flash,gemini-3.1-flash-lite
+      - key: MODEL_FALLBACK_MODELS
+        value: gemini-3-flash-preview,gemini-3.1-flash-lite,gemini-3.5-flash
+      # Set this to the deployed Vercel origin, e.g. https://agentlens.vercel.app
+      - key: CORS_ORIGINS
+        sync: false
+      - key: RATE_LIMIT_REQUESTS
+        value: 30
+      - key: MAX_SECONDS_DEFAULT
+        value: 300
+      # SQLite must live on a persistent disk or every deploy loses runs/agents.
+      # Render disks require a paid instance type.
       - key: DB_PATH
-        value: agentlens.db
-
+        value: /var/data/agentlens.db
+    disk:
+      name: agentlens-data
+      mountPath: /var/data
+      sizeGB: 1
