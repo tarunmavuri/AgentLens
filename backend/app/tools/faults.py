@@ -1,65 +1,96 @@
+"""Chaos-engineering fault injector used by the Break-it feature.
+
+Faults are injected at the tool layer, so no agent needs special-case code. A
+fault is applied at most once per run (`occurred`), which lets the Critic retry
+path recover on the next attempt and makes the recovery observable.
+"""
+
+from __future__ import annotations
+
 import asyncio
-from typing import Any, Optional
-from pydantic import BaseModel
+from typing import Any, Callable, Literal, Optional
+
+from pydantic import BaseModel, Field
+
+FaultMode = Literal["empty", "garbage", "timeout", "wrong_answer"]
+
 
 class FaultConfig(BaseModel):
     enabled: bool = False
-    target_tool: str = "web_search"  # Tool to disrupt
-    mode: str = "wrong_answer"       # 'empty', 'garbage', 'timeout', 'wrong_answer'
-    occurred: bool = False           # Flag to ensure it triggers once per run
+    target_tool: str = "web_search"  # or "*" for every tool
+    mode: FaultMode = "wrong_answer"
+    occurred: bool = Field(default=False, exclude=True)
+
 
 class FaultInjector:
-    """Wraps tool execution to inject configurable faults for the Break-it feature."""
-
-    def __init__(self, config: Optional[FaultConfig] = None):
+    def __init__(self, config: Optional[FaultConfig] = None) -> None:
         self.config = config or FaultConfig()
 
-    async def maybe_inject(self, tool_name: str, real_call: Any, **kwargs) -> tuple[Any, bool]:
-        """
-        Returns (result, was_fault_injected).
-        If fault is injected, returns the mutated result and True.
-        """
-        if not self.config.enabled or self.config.occurred:
-            res = await real_call(**kwargs)
-            return res, False
+    async def maybe_inject(
+        self, tool_name: str, real_call: Callable[..., Any], **kwargs: Any
+    ) -> tuple[Any, bool]:
+        """Return (result, fault_injected)."""
+        applies_to_tool = (
+            self.config.target_tool in (tool_name, "*")
+        )
+        if not self.config.enabled or self.config.occurred or not applies_to_tool:
+            return await real_call(**kwargs), False
 
-        if self.config.target_tool != tool_name and self.config.target_tool != "*":
-            res = await real_call(**kwargs)
-            return res, False
-
-        # Mark that the fault has been injected
         self.config.occurred = True
 
         if self.config.mode == "empty":
-            return [] if tool_name == "web_search" else "", True
+            return ([] if tool_name == "web_search" else ""), True
 
-        elif self.config.mode == "garbage":
-            return [{"title": "Corrupted Response", "url": "null://error", "snippet": "§§§###ERROR 0xDEADBEEF MALFORMED PAYLOAD§§§"}], True
-
-        elif self.config.mode == "timeout":
-            await asyncio.sleep(0.5)
-            raise TimeoutError(f"Simulated network timeout in tool '{tool_name}' (Fault Injected)")
-
-        elif self.config.mode == "wrong_answer":
+        if self.config.mode == "garbage":
             if tool_name == "web_search":
-                return [
+                return (
+                    [
+                        {
+                            "title": "Corrupted response",
+                            "url": "null://malformed",
+                            "snippet": "###ERROR 0xDEADBEEF MALFORMED PAYLOAD###",
+                            "provider": "fault-injected",
+                        }
+                    ],
+                    True,
+                )
+            return "###ERROR: malformed tool output###", True
+
+        if self.config.mode == "timeout":
+            await asyncio.sleep(0.2)
+            raise TimeoutError(
+                f"Simulated network timeout in tool '{tool_name}' (fault injected)"
+            )
+
+        # wrong_answer -------------------------------------------------------
+        if tool_name == "web_search":
+            return (
+                [
                     {
-                        "title": "Sorting Algorithms in Quantum Computing",
-                        "url": "https://unrelated-source.org/quantum",
-                        "snippet": "Quantum entanglement reduces sorting complexity to non-deterministic random walks across superconducting qubits."
+                        "title": "Unrelated cached result",
+                        "url": "https://example.invalid/fault-injected",
+                        "snippet": (
+                            "This result is deliberately unrelated to the query and is "
+                            "labelled as fault-injected."
+                        ),
+                        "provider": "fault-injected",
                     }
-                ], True
-            elif tool_name == "python_sandbox":
-                from backend.app.tools.sandbox import SandboxResult
-                return SandboxResult(
+                ],
+                True,
+            )
+        if tool_name == "python_sandbox":
+            from backend.app.tools.sandbox import SandboxResult
+
+            return (
+                SandboxResult(
                     success=True,
-                    stdout="[INJECTED FAULT]: Benchmark result: 0.00000001 seconds (completely erroneous calculation).",
+                    stdout="[INJECTED FAULT] benchmark result: 0.00000001 seconds",
                     stderr="",
                     exit_code=0,
-                    duration_ms=10.0
-                ), True
+                    duration_ms=10.0,
+                    injected_fault=True,
+                ),
+                True,
+            )
 
-        # Default fallback
-        res = await real_call(**kwargs)
-        return res, False
-
+        return await real_call(**kwargs), False

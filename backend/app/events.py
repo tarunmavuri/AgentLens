@@ -1,91 +1,146 @@
+"""Typed, persisted execution events and the in-process fan-out bus."""
+
+from __future__ import annotations
+
 import asyncio
 import json
+import logging
 import time
-from typing import Annotated, Any, Literal, Optional
+from typing import Any, Literal, Optional
+
 from pydantic import BaseModel, Field
+
 from backend.app.db import get_db_connection
+
+logger = logging.getLogger(__name__)
+
 
 class Usage(BaseModel):
     in_tokens: int = 0
     out_tokens: int = 0
     cost_usd: float = 0.0
     latency_ms: float = 0.0
+    model: Optional[str] = None
 
-# Formally enumerated event types. Pydantic validates this at construction.
+
 EventType = Literal[
     # Agent sub-events
-    "thought",          # agent reasoning / internal monologue  (concept: react)
-    "tool_call",        # agent invokes a tool                  (concept: tool_use)
-    "tool_result",      # tool returns a result                 (concept: tool_use)
-    "artifact",         # binary output e.g. base64 PNG plot    (concept: tool_use)
-    "critique",         # Critic evaluation verdict             (concept: reflection)
-    "critic_result",    # Critic verdict summary                (concept: evaluation)
-    "memory_write",     # agent wrote to run memory             (concept: memory)
-    "memory_read",      # agent read from run memory            (concept: memory)
+    "thought",
+    "tool_call",
+    "tool_result",
+    "artifact",
+    "critique",
+    "critic_result",
+    "memory_write",
+    "memory_read",
     # Orchestrator lifecycle events
-    "run_started",      # run begins                            (concept: orchestration)
-    "plan_created",     # planner produced a plan               (concept: planning)
-    "task_started",     # a task enters execution               (concept: orchestration)
-    "agent_started",    # an agent begins a task                (concept: orchestration)
-    "retry",            # Critic requested a retry              (concept: reflection)
-    "task_done",        # a task completed                      (concept: orchestration)
-    "agent_finished",   # an agent finished a task              (concept: orchestration)
-    "run_finished",     # run completed successfully            (concept: evaluation)
-    "run_failed",       # run terminated with an error          (concept: orchestration)
+    "run_started",
+    "plan_created",
+    "task_started",
+    "agent_started",
+    "retry",
+    "task_done",
+    "task_failed",
+    "agent_finished",
+    "final_answer",
+    "run_finished",
+    "run_failed",
     # Safety / fault injection / budget events
-    "guardrail",        # generic guardrail signal              (concept: guardrails)
-    "guardrail_warning",# approaching budget limits             (concept: guardrails)
-    "fault_injected",   # chaos engineering fault injected     (concept: guardrails)
+    "guardrail",
+    "guardrail_warning",
+    "fault_injected",
     # Catch-all lifecycle helpers
-    "status",           # general status update                 (concept: orchestration)
-    "error",            # non-fatal structured error            (concept: orchestration)
+    "status",
+    "error",
 ]
+
+# Only actions an agent actually takes consume the step budget. Lifecycle
+# bookkeeping (task_started, task_done, memory_write, ...) does not, otherwise
+# the step cap would measure logging volume instead of agent effort.
+STEP_EVENT_TYPES = frozenset(
+    {"plan_created", "thought", "tool_call", "critique", "final_answer"}
+)
+
+TERMINAL_EVENT_TYPES = frozenset({"run_finished", "run_failed"})
+
 
 class Event(BaseModel):
     id: int
     run_id: str
     ts: float = Field(default_factory=time.time)
-    type: EventType  # validated against the enum above
+    type: EventType
     agent_id: str
     agent_category: str = "built_in"  # built_in, custom, system
     task_id: Optional[str] = None
     payload: dict[str, Any] = Field(default_factory=dict)
-    concept: Optional[str] = None  # react, planning, tool_use, reflection, orchestration, memory, guardrails, evaluation
+    concept: Optional[str] = None
     usage: Optional[Usage] = None
 
     def to_sse(self) -> str:
+        # Deliberately unnamed (`message`) events: EventSource.onmessage only
+        # fires for unnamed events, and every client needs all event types.
+        # The type lives in the JSON payload and controls the SSE `id:` cursor.
         data = self.model_dump_json()
-        return f"id: {self.id}\nevent: {self.type}\ndata: {data}\n\n"
+        return f"id: {self.id}\ndata: {data}\n\n"
+
+    @classmethod
+    def from_row(cls, row: Any) -> "Event":
+        usage_raw = row["usage_json"]
+        return cls(
+            id=row["id"],
+            run_id=row["run_id"],
+            ts=row["ts"],
+            type=row["type"],
+            agent_id=row["agent_id"],
+            agent_category=row["agent_category"],
+            task_id=row["task_id"],
+            payload=json.loads(row["payload_json"]),
+            concept=row["concept"],
+            usage=Usage(**json.loads(usage_raw)) if usage_raw else None,
+        )
+
 
 class EventBus:
-    def __init__(self):
+    """Persists every event first, then fans it out to live SSE subscribers."""
+
+    def __init__(self) -> None:
         self._queues: dict[str, list[asyncio.Queue[Event]]] = {}
         self._lock = asyncio.Lock()
 
     async def subscribe(self, run_id: str) -> asyncio.Queue[Event]:
         queue: asyncio.Queue[Event] = asyncio.Queue()
         async with self._lock:
-            if run_id not in self._queues:
-                self._queues[run_id] = []
-            self._queues[run_id].append(queue)
+            self._queues.setdefault(run_id, []).append(queue)
         return queue
 
-    async def unsubscribe(self, run_id: str, queue: asyncio.Queue[Event]):
+    async def unsubscribe(self, run_id: str, queue: asyncio.Queue[Event]) -> None:
         async with self._lock:
-            if run_id in self._queues:
-                if queue in self._queues[run_id]:
-                    self._queues[run_id].remove(queue)
-                if not self._queues[run_id]:
-                    del self._queues[run_id]
+            queues = self._queues.get(run_id)
+            if not queues:
+                return
+            if queue in queues:
+                queues.remove(queue)
+            if not queues:
+                self._queues.pop(run_id, None)
 
-    async def publish(self, event: Event):
-        # 1. Persist to SQLite
+    async def publish(self, event: Event) -> None:
+        # SQLite writes are blocking; keep them off the event loop so SSE
+        # streaming and other runs stay responsive.
+        await asyncio.to_thread(self._persist, event)
+
+        async with self._lock:
+            queues = list(self._queues.get(event.run_id, ()))
+
+        for queue in queues:
+            await queue.put(event)
+
+    @staticmethod
+    def _persist(event: Event) -> None:
         conn = get_db_connection()
         try:
-            cursor = conn.cursor()
-            cursor.execute(
+            conn.execute(
                 """
-                INSERT OR REPLACE INTO events 
+                INSERT OR REPLACE INTO events
                 (run_id, id, ts, type, agent_id, agent_category, task_id, payload_json, concept, usage_json)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -97,21 +152,29 @@ class EventBus:
                     event.agent_id,
                     event.agent_category,
                     event.task_id,
-                    json.dumps(event.payload),
+                    json.dumps(event.payload, default=str),
                     event.concept,
                     json.dumps(event.usage.model_dump()) if event.usage else None,
                 ),
             )
             conn.commit()
+        except Exception:  # pragma: no cover - storage failure must be visible
+            logger.exception("Failed to persist event %s for run %s", event.id, event.run_id)
+            raise
         finally:
             conn.close()
 
-        # 2. Dispatch to memory queues
-        async with self._lock:
-            queues = self._queues.get(event.run_id, []).copy()
-        
-        for q in queues:
-            await q.put(event)
+    @staticmethod
+    def fetch_events(run_id: str, after_id: int = 0) -> list[Event]:
+        conn = get_db_connection()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM events WHERE run_id = ? AND id > ? ORDER BY id ASC",
+                (run_id, after_id),
+            ).fetchall()
+            return [Event.from_row(row) for row in rows]
+        finally:
+            conn.close()
+
 
 event_bus = EventBus()
-

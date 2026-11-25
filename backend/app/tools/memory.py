@@ -34,6 +34,16 @@ class RunMemory:
             conn.close()
 
     @staticmethod
+    def clear(run_id: str) -> None:
+        """Remove a run's working memory (used by isolated agent tests)."""
+        conn = get_db_connection()
+        try:
+            conn.execute("DELETE FROM memory WHERE run_id = ?", (run_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+    @staticmethod
     def list_all(run_id: str) -> dict[str, str]:
         conn = get_db_connection()
         try:
