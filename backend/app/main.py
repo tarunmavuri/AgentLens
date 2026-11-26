@@ -6,11 +6,12 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.app.agents.registry import seed_default_agents
+from backend.app.auth import AuthenticatedUser, get_current_user
 from backend.app.config import settings
 from backend.app.db import init_db
 from backend.app.golden_runs import seed_golden_runs
@@ -155,3 +156,9 @@ def public_config():
 @app.get("/concepts")
 def get_concepts():
     return CONCEPTS_DATA
+
+
+@app.get("/auth/me", response_model=AuthenticatedUser)
+def get_authenticated_user(current_user: AuthenticatedUser = Depends(get_current_user)):
+    """Return the verified Firebase user profile for the current bearer token."""
+    return current_user

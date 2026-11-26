@@ -1,13 +1,24 @@
 import React from 'react';
 import { useAppStore, ViewType } from '../../store/useAppStore';
-import { Moon, Sun, Layers, Plus, BookOpen } from 'lucide-react';
+import { useAuthStore } from '../../store/useAuthStore';
+import { Moon, Sun, Layers, Plus, BookOpen, LogOut, LogIn } from 'lucide-react';
 
 interface NavbarProps {
   onOpenNewRun: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onOpenNewRun }) => {
-  const { theme, toggleTheme, currentView, setView } = useAppStore();
+  const { theme, toggleTheme, currentView, setView, clearUserData } = useAppStore();
+  const { user, signOut } = useAuthStore();
+
+  const userLabel = user?.displayName || user?.email?.split('@')[0] || 'Account';
+  const userInitial = userLabel.charAt(0).toUpperCase();
+
+  const handleSignOut = async () => {
+    await signOut();
+    clearUserData();
+    setView('landing');
+  };
 
   const links: { label: string; view: ViewType; matches: ViewType[] }[] = [
     { label: 'Home', view: 'landing', matches: ['landing'] },
@@ -96,12 +107,40 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenNewRun }) => {
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
 
-          <div className="hidden lg:flex items-center space-x-2 px-2.5 py-1 rounded-full border dark:border-charcoal-border border-cream-border dark:bg-charcoal-surface bg-cream-surface">
-            <div className="w-6 h-6 rounded-full bg-coral/20 text-coral flex items-center justify-center text-xs font-bold">
-              M
+          {user ? (
+            <div className="flex items-center space-x-2">
+              <div
+                title={user.email || userLabel}
+                className="hidden lg:flex items-center space-x-2 px-2.5 py-1 rounded-full border dark:border-charcoal-border border-cream-border dark:bg-charcoal-surface bg-cream-surface"
+              >
+                <div className="w-6 h-6 rounded-full bg-coral/20 text-coral flex items-center justify-center text-xs font-bold">
+                  {userInitial}
+                </div>
+                <span className="text-xs font-semibold max-w-[8rem] truncate">{userLabel}</span>
+              </div>
+              <button
+                onClick={handleSignOut}
+                title="Sign out"
+                aria-label="Sign out"
+                className="px-3 py-2 rounded-full border text-xs font-semibold flex items-center space-x-1.5 transition-all
+                  dark:bg-charcoal-surface dark:border-charcoal-border dark:hover:bg-charcoal-border/60
+                  bg-cream-surface border-cream-border hover:bg-cream-border/60"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sign out</span>
+              </button>
             </div>
-            <span className="text-xs font-semibold tracking-wider uppercase">Mavuri</span>
-          </div>
+          ) : (
+            <button
+              onClick={() => setView('auth')}
+              className="px-3.5 py-2 rounded-full border text-xs font-semibold flex items-center space-x-1.5 transition-all
+                dark:bg-charcoal-surface dark:border-charcoal-border dark:hover:bg-charcoal-border/60
+                bg-cream-surface border-cream-border hover:bg-cream-border/60"
+            >
+              <LogIn className="w-3.5 h-3.5 text-coral" />
+              <span>Sign in</span>
+            </button>
+          )}
 
           <button
             onClick={() => (currentView === 'landing' ? setView('learn') : onOpenNewRun())}

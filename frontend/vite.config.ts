@@ -13,6 +13,7 @@ export default defineConfig({
       '/health': 'http://127.0.0.1:8000',
       '/concepts': 'http://127.0.0.1:8000',
       '/config': 'http://127.0.0.1:8000',
+      '/auth': 'http://127.0.0.1:8000',
     }
   }
 })

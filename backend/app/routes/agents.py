@@ -8,7 +8,7 @@ import time
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.agents.base import AgentDefinition, TaskDefinition
@@ -17,6 +17,7 @@ from backend.app.agents.registry import (
     AgentValidationError,
     agent_registry,
 )
+from backend.app.auth import AuthenticatedUser, get_current_user
 from backend.app.config import settings
 from backend.app.db import db_connection
 from backend.app.orchestrator import run_agent_task
@@ -64,25 +65,40 @@ class TestAgentRequest(BaseModel):
 
 
 @router.get("", response_model=list[AgentDefinition])
-def list_agents(agent_type: Optional[str] = None, enabled_only: bool = False):
-    return agent_registry.list_agents(agent_type=agent_type, enabled_only=enabled_only)
+def list_agents(
+    agent_type: Optional[str] = None,
+    enabled_only: bool = False,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    return agent_registry.list_agents(
+        agent_type=agent_type,
+        enabled_only=enabled_only,
+        user_id=current_user.uid,
+    )
 
 
 @router.get("/{agent_id}", response_model=AgentDefinition)
-def get_agent(agent_id: str):
-    agent = agent_registry.get_agent(agent_id)
+def get_agent(
+    agent_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    agent = agent_registry.get_agent(agent_id, user_id=current_user.uid)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     return agent
 
 
 @router.post("", response_model=AgentDefinition)
-def create_agent(req: AgentCreateRequest):
+def create_agent(
+    req: AgentCreateRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
     slug = re.sub(r"[^a-zA-Z0-9_]+", "_", req.name.lower()).strip("_") or "agent"
     agent_id = f"{slug[:40]}_{uuid.uuid4().hex[:6]}"
 
     definition = AgentDefinition(
         agent_id=agent_id,
+        user_id=current_user.uid,
         name=req.name.strip(),
         description=req.description.strip(),
         role=req.role.strip(),
@@ -95,14 +111,19 @@ def create_agent(req: AgentCreateRequest):
         enabled=req.enabled,
     )
     try:
-        return agent_registry.create_agent(definition)
+        return agent_registry.create_agent(definition, user_id=current_user.uid)
     except AgentValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.put("/{agent_id}", response_model=AgentDefinition)
-def update_agent(agent_id: str, req: AgentUpdateRequest):
-    if not agent_registry.get_agent(agent_id):
+def update_agent(
+    agent_id: str,
+    req: AgentUpdateRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    agent = agent_registry.get_agent(agent_id, user_id=current_user.uid)
+    if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
     updates = req.model_dump(exclude_unset=True)
@@ -111,9 +132,16 @@ def update_agent(agent_id: str, req: AgentUpdateRequest):
             status_code=400,
             detail=f"'{agent_id}' is required by the orchestrator and cannot be disabled.",
         )
+    if agent.user_id != current_user.uid:
+        raise HTTPException(
+            status_code=403,
+            detail="System and template agents cannot be modified directly. Duplicate the agent to customize your own copy.",
+        )
 
     try:
-        updated = agent_registry.update_agent(agent_id, updates)
+        updated = agent_registry.update_agent(
+            agent_id, updates, user_id=current_user.uid
+        )
     except AgentValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not updated:
@@ -122,25 +150,37 @@ def update_agent(agent_id: str, req: AgentUpdateRequest):
 
 
 @router.delete("/{agent_id}")
-def delete_agent(agent_id: str):
-    agent = agent_registry.get_agent(agent_id)
+def delete_agent(
+    agent_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    agent = agent_registry.get_agent(agent_id, user_id=current_user.uid)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     if agent.agent_type == "built_in":
         raise HTTPException(status_code=400, detail="Cannot delete built-in agents")
+    if agent.user_id != current_user.uid:
+        raise HTTPException(status_code=403, detail="Template agents cannot be deleted.")
 
-    return {"success": agent_registry.delete_agent(agent_id), "deleted_agent_id": agent_id}
+    return {
+        "success": agent_registry.delete_agent(agent_id, user_id=current_user.uid),
+        "deleted_agent_id": agent_id,
+    }
 
 
 @router.post("/{agent_id}/duplicate", response_model=AgentDefinition)
-def duplicate_agent(agent_id: str):
-    current = agent_registry.get_agent(agent_id)
+def duplicate_agent(
+    agent_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    current = agent_registry.get_agent(agent_id, user_id=current_user.uid)
     if not current:
         raise HTTPException(status_code=404, detail="Agent not found")
 
     copy = current.model_copy(
         update={
             "agent_id": f"{current.agent_id[:40]}_copy_{uuid.uuid4().hex[:4]}",
+            "user_id": current_user.uid,
             "name": f"{current.name} (Copy)"[:60],
             "agent_type": "custom",
             "enabled": True,
@@ -149,14 +189,17 @@ def duplicate_agent(agent_id: str):
         }
     )
     try:
-        return agent_registry.create_agent(copy)
+        return agent_registry.create_agent(copy, user_id=current_user.uid)
     except AgentValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/{agent_id}/toggle", response_model=AgentDefinition)
-def toggle_agent(agent_id: str):
-    current = agent_registry.get_agent(agent_id)
+def toggle_agent(
+    agent_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    current = agent_registry.get_agent(agent_id, user_id=current_user.uid)
     if not current:
         raise HTTPException(status_code=404, detail="Agent not found")
     if current.enabled and agent_id in SYSTEM_AGENT_IDS:
@@ -164,17 +207,28 @@ def toggle_agent(agent_id: str):
             status_code=400,
             detail=f"'{agent_id}' is required by the orchestrator and cannot be disabled.",
         )
+    if current.user_id != current_user.uid:
+        raise HTTPException(
+            status_code=403,
+            detail="System and template agents cannot be toggled directly. Duplicate the agent to manage your own copy.",
+        )
 
-    updated = agent_registry.update_agent(agent_id, {"enabled": not current.enabled})
+    updated = agent_registry.update_agent(
+        agent_id, {"enabled": not current.enabled}, user_id=current_user.uid
+    )
     if not updated:  # pragma: no cover - defensive
         raise HTTPException(status_code=400, detail="Failed to toggle agent")
     return updated
 
 
 @router.get("/{agent_id}/history")
-def agent_history(agent_id: str, limit: int = Query(default=12, ge=1, le=50)):
+def agent_history(
+    agent_id: str,
+    limit: int = Query(default=12, ge=1, le=50),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
     """Recent executions performed by this agent, derived from stored events."""
-    agent = agent_registry.get_agent(agent_id)
+    agent = agent_registry.get_agent(agent_id, user_id=current_user.uid)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
@@ -184,18 +238,20 @@ def agent_history(agent_id: str, limit: int = Query(default=12, ge=1, le=50)):
             SELECT e.run_id, e.task_id, e.ts, e.type, e.payload_json, r.goal
             FROM events e
             JOIN runs r ON r.id = e.run_id
-            WHERE e.agent_id = ?
+            WHERE e.agent_id = ? AND (r.user_id = ? OR r.is_public = 1)
             ORDER BY e.ts DESC
             LIMIT 2000
             """,
-            (agent_id,),
+            (agent_id, current_user.uid),
         ).fetchall()
         critiques = conn.execute(
             """
-            SELECT run_id, task_id, payload_json
-            FROM events
-            WHERE type = 'critique'
-            """
+            SELECT e.run_id, e.task_id, e.payload_json
+            FROM events e
+            JOIN runs r ON r.id = e.run_id
+            WHERE e.type = 'critique' AND (r.user_id = ? OR r.is_public = 1)
+            """,
+            (current_user.uid,),
         ).fetchall()
 
     score_lookup: dict[tuple[str, Optional[str]], float] = {}
@@ -253,9 +309,13 @@ def agent_history(agent_id: str, limit: int = Query(default=12, ge=1, le=50)):
 
 
 @router.post("/{agent_id}/test")
-async def test_agent(agent_id: str, req: TestAgentRequest):
+async def test_agent(
+    agent_id: str,
+    req: TestAgentRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
     """Execute one task in isolation, outside any orchestrated run."""
-    agent = agent_registry.get_agent(agent_id)
+    agent = agent_registry.get_agent(agent_id, user_id=current_user.uid)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     if agent_id in SYSTEM_AGENT_IDS:

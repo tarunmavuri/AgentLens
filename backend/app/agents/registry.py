@@ -190,13 +190,14 @@ class AgentRegistry:
             conn.execute(
                 """
                 INSERT OR IGNORE INTO agents
-                (agent_id, name, description, role, instructions, model_config_json,
+                (agent_id, user_id, name, description, role, instructions, model_config_json,
                  allowed_tools_json, output_schema_json, execution_limits_json,
                  agent_type, enabled, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     agent.agent_id,
+                    "system",
                     agent.name,
                     agent.description,
                     agent.role,
@@ -240,10 +241,16 @@ class AgentRegistry:
 
     # ------------------------------------------------------------------- read
     def list_agents(
-        self, agent_type: Optional[str] = None, enabled_only: bool = False
+        self,
+        agent_type: Optional[str] = None,
+        enabled_only: bool = False,
+        user_id: Optional[str] = None,
     ) -> list[AgentDefinition]:
         query = "SELECT * FROM agents WHERE 1=1"
         params: list[Any] = []
+        if user_id is not None:
+            query += " AND (user_id = 'system' OR user_id = ?)"
+            params.append(user_id)
         if agent_type:
             query += " AND agent_type = ?"
             params.append(agent_type)
@@ -255,39 +262,50 @@ class AgentRegistry:
             rows = conn.execute(query, params).fetchall()
             return [self._row_to_agent(row) for row in rows]
 
-    def get_agent(self, agent_id: str) -> Optional[AgentDefinition]:
+    def get_agent(
+        self, agent_id: str, user_id: Optional[str] = None
+    ) -> Optional[AgentDefinition]:
+        query = "SELECT * FROM agents WHERE agent_id = ?"
+        params: list[Any] = [agent_id]
+        if user_id is not None:
+            query += " AND (user_id = 'system' OR user_id = ?)"
+            params.append(user_id)
         with db_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM agents WHERE agent_id = ?", (agent_id,)
-            ).fetchone()
+            row = conn.execute(query, params).fetchone()
             return self._row_to_agent(row) if row else None
 
-    def list_worker_agents(self, enabled_only: bool = True) -> list[AgentDefinition]:
+    def list_worker_agents(
+        self, enabled_only: bool = True, user_id: Optional[str] = None
+    ) -> list[AgentDefinition]:
         return [
             agent
-            for agent in self.list_agents(enabled_only=enabled_only)
+            for agent in self.list_agents(enabled_only=enabled_only, user_id=user_id)
             if agent.agent_id not in SYSTEM_AGENT_IDS
         ]
 
     # ------------------------------------------------------------------ write
-    def create_agent(self, agent: AgentDefinition) -> AgentDefinition:
+    def create_agent(
+        self, agent: AgentDefinition, user_id: Optional[str] = None
+    ) -> AgentDefinition:
         validate_agent_definition(agent)
         if agent.agent_id in SYSTEM_AGENT_IDS:
             raise AgentValidationError("Agent id collides with a system agent.")
 
+        owner_id = user_id if user_id is not None else agent.user_id
         now = time.time()
         try:
             with db_connection() as conn:
                 conn.execute(
                     """
                     INSERT INTO agents
-                    (agent_id, name, description, role, instructions, model_config_json,
+                    (agent_id, user_id, name, description, role, instructions, model_config_json,
                      allowed_tools_json, output_schema_json, execution_limits_json,
                      agent_type, enabled, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         agent.agent_id,
+                        owner_id,
                         agent.name,
                         agent.description,
                         agent.role,
@@ -311,10 +329,15 @@ class AgentRegistry:
         return created
 
     def update_agent(
-        self, agent_id: str, updates: dict[str, Any]
+        self,
+        agent_id: str,
+        updates: dict[str, Any],
+        user_id: Optional[str] = None,
     ) -> Optional[AgentDefinition]:
-        current = self.get_agent(agent_id)
+        current = self.get_agent(agent_id, user_id=user_id)
         if not current:
+            return None
+        if user_id is not None and current.user_id != user_id:
             return None
 
         merged = current.model_copy(
@@ -357,9 +380,11 @@ class AgentRegistry:
             )
         return self.get_agent(agent_id)
 
-    def delete_agent(self, agent_id: str) -> bool:
-        agent = self.get_agent(agent_id)
+    def delete_agent(self, agent_id: str, user_id: Optional[str] = None) -> bool:
+        agent = self.get_agent(agent_id, user_id=user_id)
         if not agent or agent.agent_type == "built_in":
+            return False
+        if user_id is not None and agent.user_id != user_id:
             return False
         with db_connection() as conn:
             cursor = conn.execute("DELETE FROM agents WHERE agent_id = ?", (agent_id,))
@@ -368,6 +393,7 @@ class AgentRegistry:
     def _row_to_agent(self, row: Any) -> AgentDefinition:
         return AgentDefinition(
             agent_id=row["agent_id"],
+            user_id=row["user_id"] if "user_id" in row.keys() else "system",
             name=row["name"],
             description=row["description"],
             role=row["role"],

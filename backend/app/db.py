@@ -12,7 +12,7 @@ from typing import Iterator
 
 from backend.app.config import settings
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def get_db_connection() -> sqlite3.Connection:
@@ -48,6 +48,8 @@ def init_db() -> None:
         """
         CREATE TABLE IF NOT EXISTS runs (
             id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL DEFAULT '',
+            is_public INTEGER NOT NULL DEFAULT 0,
             goal TEXT NOT NULL,
             config_json TEXT NOT NULL,
             status TEXT NOT NULL,
@@ -56,7 +58,16 @@ def init_db() -> None:
         )
         """
     )
+    run_cols = {
+        row["name"] for row in cursor.execute("PRAGMA table_info(runs)").fetchall()
+    }
+    if "user_id" not in run_cols:
+        cursor.execute("ALTER TABLE runs ADD COLUMN user_id TEXT NOT NULL DEFAULT ''")
+    if "is_public" not in run_cols:
+        cursor.execute("ALTER TABLE runs ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0")
+
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_runs_created_at ON runs(created_at DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_runs_user_created ON runs(user_id, created_at DESC)")
 
     cursor.execute(
         """
@@ -83,6 +94,7 @@ def init_db() -> None:
         """
         CREATE TABLE IF NOT EXISTS agents (
             agent_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL DEFAULT 'system',
             name TEXT NOT NULL,
             description TEXT NOT NULL,
             role TEXT NOT NULL,
@@ -98,7 +110,15 @@ def init_db() -> None:
         )
         """
     )
+    agent_cols = {
+        row["name"] for row in cursor.execute("PRAGMA table_info(agents)").fetchall()
+    }
+    if "user_id" not in agent_cols:
+        cursor.execute(
+            "ALTER TABLE agents ADD COLUMN user_id TEXT NOT NULL DEFAULT 'system'"
+        )
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_agents_type ON agents(agent_type, enabled)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_agents_user_type ON agents(user_id, agent_type, enabled)")
 
     cursor.execute(
         """

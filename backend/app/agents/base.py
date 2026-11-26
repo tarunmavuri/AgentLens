@@ -47,6 +47,7 @@ class CriticEvaluation(BaseModel):
 
 class AgentDefinition(BaseModel):
     agent_id: str
+    user_id: str = "system"
     name: str
     description: str
     role: str

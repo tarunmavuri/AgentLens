@@ -9,11 +9,12 @@ import time
 import uuid
 from typing import Any, AsyncIterator, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.agents.registry import agent_registry
+from backend.app.auth import AuthenticatedUser, get_current_user
 from backend.app.config import settings
 from backend.app.db import db_connection, get_db_connection
 from backend.app.events import (
@@ -76,13 +77,27 @@ def _run_row_to_summary(row: Any) -> RunSummary:
     )
 
 
+def _get_accessible_run(conn: Any, run_id: str, user_id: str) -> Any:
+    row = conn.execute(
+        "SELECT * FROM runs WHERE id = ? AND (user_id = ? OR is_public = 1)",
+        (run_id, user_id),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return row
+
+
 @router.post("", response_model=dict[str, str])
-async def create_run(req: CreateRunRequest, background_tasks: BackgroundTasks):
+async def create_run(
+    req: CreateRunRequest,
+    background_tasks: BackgroundTasks,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
     goal = req.goal.strip()
     if not goal:
         raise HTTPException(status_code=400, detail="Goal cannot be empty.")
 
-    if not agent_registry.list_worker_agents(enabled_only=True):
+    if not agent_registry.list_worker_agents(enabled_only=True, user_id=current_user.uid):
         raise HTTPException(
             status_code=400,
             detail=(
@@ -102,10 +117,19 @@ async def create_run(req: CreateRunRequest, background_tasks: BackgroundTasks):
     with db_connection() as conn:
         conn.execute(
             """
-            INSERT INTO runs (id, goal, config_json, status, created_at, totals_json)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO runs (id, user_id, is_public, goal, config_json, status, created_at, totals_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (run_id, goal, json.dumps(config), "queued", time.time(), json.dumps({})),
+            (
+                run_id,
+                current_user.uid,
+                0,
+                goal,
+                json.dumps(config),
+                "queued",
+                time.time(),
+                json.dumps({}),
+            ),
         )
 
     orchestrator = Orchestrator(
@@ -113,6 +137,7 @@ async def create_run(req: CreateRunRequest, background_tasks: BackgroundTasks):
         goal=goal,
         config=config,
         fault_config=fault_config,
+        user_id=current_user.uid,
     )
     background_tasks.add_task(orchestrator.run)
 
@@ -120,20 +145,25 @@ async def create_run(req: CreateRunRequest, background_tasks: BackgroundTasks):
 
 
 @router.get("", response_model=list[RunSummary])
-def list_runs(limit: int = Query(default=100, ge=1, le=500)):
+def list_runs(
+    limit: int = Query(default=100, ge=1, le=500),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
     with db_connection() as conn:
         rows = conn.execute(
-            "SELECT * FROM runs ORDER BY created_at DESC LIMIT ?", (limit,)
+            "SELECT * FROM runs WHERE user_id = ? OR is_public = 1 ORDER BY created_at DESC LIMIT ?",
+            (current_user.uid, limit),
         ).fetchall()
         return [_run_row_to_summary(row) for row in rows]
 
 
 @router.get("/{run_id}")
-def get_run(run_id: str):
+def get_run(
+    run_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
     with db_connection() as conn:
-        row = conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Run not found")
+        row = _get_accessible_run(conn, run_id, current_user.uid)
     return {
         "id": row["id"],
         "goal": row["goal"],
@@ -160,6 +190,7 @@ async def stream_run_events(
     request: Request,
     last_event_id: Optional[str] = Header(default=None, alias="Last-Event-ID"),
     last_event_id_query: Optional[str] = Query(default=None, alias="last_event_id"),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> StreamingResponse:
     """Server-Sent Events with historical catch-up and resumable reconnects.
 
@@ -168,11 +199,7 @@ async def stream_run_events(
     is what the browser's EventSource sends automatically on reconnect.
     """
     with db_connection() as conn:
-        run_row = conn.execute(
-            "SELECT status FROM runs WHERE id = ?", (run_id,)
-        ).fetchone()
-    if not run_row:
-        raise HTTPException(status_code=404, detail="Run not found")
+        run_row = _get_accessible_run(conn, run_id, current_user.uid)
 
     run_status = run_row["status"]
     resume_from = _parse_last_event_id(last_event_id, last_event_id_query)
@@ -225,16 +252,17 @@ async def stream_run_events(
 
 
 @router.get("/{run_id}/metrics")
-def run_metrics(run_id: str):
+def run_metrics(
+    run_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
     """Metrics derived from stored events, plus the orchestrator's own totals.
 
     The dashboard can therefore show exactly what the event log supports and
     flag any divergence instead of presenting unchecked numbers.
     """
     with db_connection() as conn:
-        run_row = conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
-    if not run_row:
-        raise HTTPException(status_code=404, detail="Run not found")
+        run_row = _get_accessible_run(conn, run_id, current_user.uid)
 
     events = EventBus.fetch_events(run_id)
     in_tokens = sum(event.usage.in_tokens for event in events if event.usage)
@@ -314,11 +342,12 @@ def run_metrics(run_id: str):
 
 
 @router.get("/{run_id}/trace")
-def export_run_trace(run_id: str):
+def export_run_trace(
+    run_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
     with db_connection() as conn:
-        run_row = conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
-        if not run_row:
-            raise HTTPException(status_code=404, detail="Run not found")
+        run_row = _get_accessible_run(conn, run_id, current_user.uid)
         events = EventBus.fetch_events(run_id)
         config = json.loads(run_row["config_json"])
 

@@ -4,6 +4,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from backend.app.auth import AuthenticatedUser, get_current_user
 from backend.app.main import app
 from backend.app.middleware import RateLimitMiddleware
 
@@ -12,8 +13,16 @@ GOLDEN_RUN = "golden-run-rag-vs-finetuning"
 
 @pytest.fixture(scope="module")
 def client():
-    with TestClient(app) as test_client:
-        yield test_client
+    app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+        uid="test-user-1",
+        email="tester@example.com",
+        name="Test User",
+    )
+    try:
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
 
 
 def _sse_events(text: str) -> list[dict]:

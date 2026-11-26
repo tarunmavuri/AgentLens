@@ -74,8 +74,10 @@ class Orchestrator:
         goal: str,
         config: Optional[dict[str, Any]] = None,
         fault_config: Optional[FaultConfig] = None,
+        user_id: str = "system",
     ) -> None:
         self.run_id = run_id
+        self.user_id = user_id
         self.goal = goal
         self.config = config or {}
         self.event_seq = 0
@@ -265,7 +267,7 @@ class Orchestrator:
 
     # ------------------------------------------------------------------ phases
     async def _create_plan(self) -> tuple[Plan, Usage]:
-        available = agent_registry.list_agents(enabled_only=True)
+        available = agent_registry.list_agents(enabled_only=True, user_id=self.user_id)
         timeout = 60.0
         try:
             return await asyncio.wait_for(
@@ -299,7 +301,7 @@ class Orchestrator:
         return ordered
 
     async def _execute_task(self, task: TaskDefinition) -> None:
-        agent = agent_registry.get_agent(task.assigned_agent_id)
+        agent = agent_registry.get_agent(task.assigned_agent_id, user_id=self.user_id)
         if task.assigned_agent_id in SYSTEM_AGENT_IDS:
             await self._record_task_failure(
                 task, f"'{task.assigned_agent_id}' is a system agent and cannot execute tasks."

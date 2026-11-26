@@ -1,285 +1,596 @@
 <div align="center">
 
-# AgentLens
-
-### The glass-box multi-agent platform
+# AGENTLENS
 
 **Build your own AI agent teams. Watch them collaborate. Understand every execution.**
 
-![Backend tests](https://img.shields.io/badge/backend%20tests-51%20passed-2ea44f?style=for-the-badge)
-![Frontend build](https://img.shields.io/badge/frontend%20build-passing-2ea44f?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.10%E2%80%933.14-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-Auth-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
 
 </div>
 
----
-
-AgentLens runs a team of LLM agents on one goal, then shows you exactly what happened: the plan, every tool call, every observation, every critic verdict, every retry, and what it cost. Runs are event-sourced in SQLite and streamed to the browser over SSE, so a trace can be replayed byte-for-byte without calling a model again.
-
-- **Hand-rolled orchestrator** — no LangGraph, no LangChain, no MCP. The state machine is auditable Python.
-- **Built-in agents** — Planner, Researcher, Coder, Critic.
-- **Custom agents** — configured in the UI (role, instructions, model, tool permissions, output schema, limits), stored in SQLite, registered dynamically, and assigned work by the Planner alongside built-in agents.
-- **Real Gemini integration** — structured JSON output validated with Pydantic, token/latency/cost accounting, repair pass on invalid JSON, retry with backoff, and model fallback when a model is unavailable or out of quota.
-- **Live execution graph** — nodes and edges are derived from persisted events, never from frontend timers.
+AgentLens is a **glass-box multi-agent AI platform** for creating, orchestrating, monitoring, and evaluating AI agent teams. Instead of hiding agent behavior behind a single black-box response, AgentLens persists every plan, decision summary, tool call, sandbox execution, critic verdict, retry, and token/cost metric as an ordered event stream in SQLite and streams it live to a React workspace over Server-Sent Events (SSE).
 
 ---
 
-## Quickstart
+## Table of Contents
 
-```bash
-git clone <your-fork> AgentLens && cd AgentLens
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env        # optional: add GEMINI_API_KEY
+1. [Project Overview](#2-project-overview)
+2. [Key Features](#3-key-features)
+3. [Architecture](#4-architecture)
+4. [Agent Architecture](#5-agent-architecture)
+5. [Tech Stack](#6-tech-stack)
+6. [Screenshots](#7-screenshots)
+7. [Project Structure](#8-project-structure)
+8. [Prerequisites](#9-prerequisites)
+9. [Installation and Local Setup](#10-installation-and-local-setup)
+10. [Firebase Setup](#11-firebase-setup)
+11. [Environment Variables](#12-environment-variables)
+12. [Usage Guide](#13-usage-guide)
+13. [API Documentation](#14-api-documentation)
+14. [Testing](#15-testing)
+15. [Deployment](#16-deployment)
+16. [Security](#17-security)
+17. [Roadmap](#18-roadmap)
+18. [Contributing](#19-contributing)
+19. [License](#20-license)
+
+---
+
+## 2. Project Overview
+
+### What AgentLens Is
+AgentLens is a full-stack multi-agent orchestration and observability workbench built with **FastAPI**, **React 19**, **SQLite**, **Google Gemini**, and **Firebase Authentication**. Every execution ("run") is driven by a hand-written Python state machine that decomposes a user goal into dependent tasks, dispatches built-in and user-configured agents, evaluates outputs with a Critic, and records immutable events for live streaming and deterministic replay.
+
+### What Problem It Solves
+Most agent frameworks obscure *why* an agent chose a tool, *how* much a retry loop cost, or *where* a multi-step workflow failed. AgentLens treats observability and evaluation as first-class primitives:
+- **No black-box orchestration:** There is no LangGraph or LangChain abstraction layer—every state transition is explicit, auditable Python (`backend/app/orchestrator.py`).
+- **Event-sourced telemetry:** Dashboard metrics, live graphs, and historical replays are all derived from the same persisted `events` table rather than client-side estimates.
+- **Multi-user isolation:** Authenticated Firebase users own their runs, custom agents, execution histories, and traces without cross-user leakage.
+
+### How Users Interact with Multiple Agents
+Users sign in, submit a natural-language goal (optionally configuring step/token/time budgets or fault injection), and watch the **Planner** build a dependency graph of tasks assigned to **Researcher**, **Coder**, or custom agents. As tasks execute, the **Live Workspace** renders the interactive node graph (`@xyflow/react`), live activity timeline, story feed, and **Coder Live** sandbox output/plots in real time.
+
+### How Custom Agents Extend the Platform
+Users can build custom agents directly in the UI (**Build an Agent**) by configuring a name, role, system instructions, Gemini model, temperature, allowed tools (`web_search`, `python_sandbox`, `read_memory`, `write_memory`), JSON output schema, and execution limits (`max_steps`, `timeout_seconds`). Custom agents are stored in SQLite, scoped to the creator's Firebase UID, and immediately available to the Planner alongside built-in agents—without uploading arbitrary Python code.
+
+---
+
+## 3. Key Features
+
+### Built-in Agents
+- **Planner** — Decomposes goals into bounded sub-tasks with explicit `depends_on` edges, assigned agents, and measurable success criteria.
+- **Researcher** — Queries web search (`Tavily` or `DuckDuckGo` fallback), stores findings in run-scoped memory, and synthesizes source-backed summaries.
+- **Coder** — Generates Python code, runs it in the isolated subprocess sandbox, inspects `stdout`/`stderr`, captures Matplotlib plot artifacts, and self-corrects on failure.
+- **Critic** — Evaluates each worker's output against the task's `success_criteria`, assigns a `0–10` score, and triggers bounded retries with actionable feedback.
+
+### Custom Agent Builder
+- **Create custom agents** with custom roles, descriptions, and system instructions.
+- **Select supported models** from the server-enforced Gemini allowlist (`ALLOWED_MODELS`).
+- **Assign tools** (`web_search`, `python_sandbox`, `read_memory`, `write_memory`) with server-side permission checks.
+- **Configure execution limits** (`max_steps` 1–20, `timeout_seconds` 5–300) and JSON output schemas.
+- **Enable, disable, duplicate, and test** custom agents in isolation (`POST /agents/{id}/test`).
+
+### Orchestration
+- **Dynamic agent registry** backed by SQLite (`AgentRegistry`), unifying built-in and custom agents under one `AgentDefinition` contract.
+- **Task assignment & dependencies** resolved deterministically (Kahn-style topological ordering with deterministic cycle breaking).
+- **Agent collaboration** via run-scoped shared working memory (`read_memory` / `write_memory`).
+- **Critic evaluation & bounded retries** passing critique feedback back into subsequent attempts (`max_retries`).
+
+### Observability
+- **Live agent visualization** using `@xyflow/react` derived directly from persisted events.
+- **Resumable SSE event streaming** (`GET /runs/{id}/events`) honoring `Last-Event-ID` and `last_event_id`.
+- **Agent activity timeline & story feed** showing concise decision summaries (`thought`), tool calls, observations, and artifacts.
+- **Tool-call monitoring** and **Coder Live** inspection of generated scripts, `stdout`, and base64-encoded Matplotlib charts.
+
+### Evaluation
+- **Token usage** (`in_tokens`, `out_tokens`, `total_tokens`) recorded per LLM call.
+- **Estimated cost** (`cost_usd`) calculated from `backend/app/pricing.py` (overridable via `MODEL_PRICING_JSON`).
+- **Latency** (`llm_latency_ms` and `wall_clock_seconds`).
+- **Critic scores & retry counts** aggregated per run and per agent (`GET /runs/{id}/metrics`).
+- **Execution budgets** tracked against guardrail limits (`max_steps`, `max_tokens`, `max_seconds`).
+
+### Reliability
+- **Code-enforced guardrails** (`GuardrailManager`) emitting `guardrail_warning` at 80% utilization and halting cleanly on `GuardrailExceeded`.
+- **Fault injection** (`web_search` or `python_sandbox` modes: `empty`, `garbage`, `timeout`, `wrong_answer`) to test Critic/retry recovery.
+- **LLM resilience** with JSON schema repair passes, exponential backoff retries, and model fallback (`MODEL_FALLBACK_MODELS`).
+- **Offline simulation mode** when `GEMINI_API_KEY` is unset (`llm_mode: "offline_simulation"`), plus two pre-seeded recorded demo runs (`recorded_demo`).
+- **Historical replay** scrubbing through persisted events step-by-step without re-invoking any LLM.
+
+### Authentication & Data Isolation
+- **Firebase Authentication** supporting Email/Password registration & sign-in and Google Sign-In.
+- **Backend ID token verification** via `firebase-admin` on all protected API and SSE endpoints.
+- **Per-user data isolation** scoping runs, traces, metrics, custom agents, and agent execution histories to each authenticated user's `uid`.
+- **SQLite memory** (`memory` table keyed by `(run_id, key)`) and **full JSON trace export** (`GET /runs/{id}/trace`).
+
+---
+
+## 4. Architecture
+
+### System Architecture
+
+```mermaid
+flowchart LR
+    U["React Frontend (Vite + TypeScript)"] -->|"1. Sign In (Email/Password or Google)"| FA["Firebase Authentication"]
+    FA -->|"2. Firebase ID Token (JWT)"| U
+    U -->|"3. Authenticated REST (Authorization: Bearer)"| API["FastAPI Backend"]
+    API -->|"4. Verify ID Token"| FAA["Firebase Admin SDK"]
+    API -->|"5. Create / Query User-Scoped Runs & Agents"| ORCH["Agent Orchestrator (State Machine)"]
+    ORCH -->|"Read Enabled Agents"| REG["Dynamic Agent Registry"]
+    REG --> AGENTS["Planner / Researcher / Coder / Critic / Custom Agents"]
+    AGENTS -->|"Permission-Checked Calls"| TOOLS["Tool Registry"]
+    TOOLS --> WS["Web Search (Tavily / DuckDuckGo)"]
+    TOOLS --> SB["Python Sandbox (Subprocess + Audit Hook)"]
+    TOOLS --> MEM["SQLite Working Memory (Run-Scoped)"]
+    ORCH -->|"6. Persist Events Before Streaming"| DB[("SQLite Database (WAL Mode)")]
+    DB -->|"7. SSE Event Stream (?token=...&Last-Event-ID)"| U
 ```
 
-Backend:
+### Execution Flow
 
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as React Workspace
+    participant API as FastAPI (/runs)
+    participant Orch as Orchestrator
+    participant Plan as Planner
+    participant Worker as Worker / Custom Agent
+    participant Critic as Critic
+    participant DB as SQLite + EventBus
+
+    User->>UI: Submit goal + budgets
+    UI->>API: POST /runs (Bearer ID Token)
+    API->>DB: Insert run (user_id, status="queued")
+    API-->>UI: { run_id, status: "queued" }
+    UI->>API: GET /runs/{id}/events?token=... (SSE)
+
+    Orch->>DB: Emit run_started
+    Orch->>Plan: create_plan(goal, user-visible enabled agents)
+    Plan-->>Orch: Plan (tasks + depends_on)
+    Orch->>DB: Emit plan_created
+
+    loop For each task in topological order
+        Orch->>DB: Emit task_started & agent_started
+        loop Until Critic accepts or max_retries reached
+            Orch->>Worker: run_agent_task(agent, run_id, task)
+            Worker->>DB: Emit thought / tool_call / tool_result / artifact
+            Worker-->>Orch: AgentResult
+            Orch->>Critic: evaluate_task(task, result)
+            Critic->>DB: Emit critique (score, verdict, feedback)
+            alt verdict == "retry" and retries remaining
+                Orch->>DB: Emit retry (with feedback)
+            end
+        end
+        Orch->>DB: Emit task_done (or task_failed)
+    end
+
+    Orch->>DB: Emit final_answer & run_finished
+    DB-->>UI: Stream all events in order over SSE
+```
+
+---
+
+## 5. Agent Architecture
+
+### Built-in Agents
+| Agent ID | Role | Allowed Tools | Behavior |
+|---|---|---|---|
+| `planner` | Strategic Planning & Task Decomposition | None (system) | Generates 1–5 dependent `TaskDefinition` items assigned to enabled worker agents. |
+| `researcher` | Information Gathering & Research | `web_search`, `read_memory`, `write_memory` | Searches the web, extracts key findings, writes summary to run memory, returns structured citations. |
+| `coder` | Algorithm Engineering & Sandbox Execution | `python_sandbox`, `read_memory`, `write_memory` | Writes Python, executes it in the sandbox, repairs errors if needed, and captures stdout + plots. |
+| `critic` | Quality Evaluation & Verification | None (system) | Scores task output (`0–10`) against `success_criteria` and directs bounded retries with feedback. |
+
+Two pre-seeded custom template agents (`security_reviewer` and `fact_checker`) are also included as shared read-only templates (`user_id = "system"`). Users can run them directly or duplicate them into private custom agents.
+
+### Shared Agent Contract & Execution Interface
+Every agent—built-in or custom—is represented by `AgentDefinition` (`backend/app/agents/base.py`) and dispatched through a single function `run_agent_task()` (`backend/app/orchestrator.py`):
+- **Input:** `TaskDefinition` (`id`, `title`, `description`, `assigned_agent_id`, `task_type`, `depends_on`, `success_criteria`, `expected_output`).
+- **Output:** `AgentResult` (`agent_id`, `task_id`, `status`, `summary`, `structured_output`, `artifacts`, `usage`, `execution_duration`).
+- **Dynamic Registration:** Custom agents created via `POST /agents` are validated (`validate_agent_definition()`), persisted to the `agents` SQLite table with `user_id = current_user.uid`, and dynamically included in `agent_registry.list_agents(enabled_only=True, user_id=self.user_id)` when the user starts a run.
+- **Custom Execution:** `CustomAgentRunner` (`backend/app/agents/custom_agent.py`) dynamically compiles the agent's JSON `output_schema` into a Pydantic model, enforces `allowed_tools` via `tool_permitted()` on every tool call, and emits the exact same `Event` stream as built-in agents.
+
+---
+
+## 6. Tech Stack
+
+| Layer | Technology | Version / Spec | Purpose |
+|---|---|---|---|
+| **Frontend Framework** | React + TypeScript | `react ^19.0.0`, `typescript ^5.7.3` | Component UI and type-safe state |
+| **Build Tool** | Vite | `vite ^6.2.0` | Dev server with API proxy & production bundler |
+| **Styling & Motion** | Tailwind CSS + Framer Motion | `tailwindcss ^3.4.17`, `framer-motion ^12.4.7` | Deep Charcoal / Warm Cream theme & transitions |
+| **Graph Visualization** | React Flow (`@xyflow/react`) | `^12.4.2` | Live interactive agent dependency graph |
+| **State Management** | Zustand | `^5.0.3` | App state (`useAppStore`) & auth state (`useAuthStore`) |
+| **Icons** | Lucide React | `^1.16.0` | UI iconography |
+| **Frontend Auth SDK** | Firebase Web SDK | `firebase ^13.4.0` | Email/Password & Google Sign-In, ID token lifecycle |
+| **Backend Framework** | FastAPI + Uvicorn | `fastapi >=0.110.0`, `uvicorn >=0.28.0` | REST API, SSE streaming, lifespan management |
+| **Validation** | Pydantic | `>=2.6.0` | Request/response schemas & dynamic LLM output models |
+| **Backend Auth SDK** | Firebase Admin SDK | `firebase-admin >=6.5.0` | Server-side Firebase ID token verification |
+| **LLM Provider** | Google Gemini API (via `httpx`) | `httpx >=0.27.0` | Structured JSON generation, repair, and model fallback |
+| **Database** | SQLite (WAL mode) | Built-in Python `sqlite3` | Event-sourced `runs`, `events`, `agents`, `memory`, `meta` |
+| **Code Sandbox** | Python Subprocess + Matplotlib | `matplotlib >=3.8.0` | Isolated code execution, audit hook, chart capture |
+| **Web Search** | Tavily API / DuckDuckGo | `requests >=2.31.0` | Primary search with automatic DuckDuckGo fallback |
+| **Testing** | Pytest + Pytest-Asyncio | `pytest >=8.0.0`, `pytest-asyncio >=0.23.0` | Backend unit, integration, scenario, and auth isolation tests |
+| **Deployment** | Vercel (FE) + Render (BE) | `frontend/vercel.json`, `render.yaml` | Managed SPA hosting and persistent-disk API hosting |
+
+---
+
+## 7. Screenshots
+
+> [!NOTE]
+> Genuine AgentLens application screenshots have not yet been committed to this repository. Any non-application reference images in the workspace are intentionally excluded.
+
+To add verified screenshots of your running AgentLens instance:
+1. Start the backend and frontend locally, sign in, and open the **Dashboard**, **Live Workspace**, **Custom Agent Builder**, **Evaluations**, and **Replay** views.
+2. Capture screenshots into `docs/screenshots/` (for example: `dashboard.png`, `live-workspace.png`, `agent-builder.png`, `evaluations.png`).
+3. Embed them here using relative paths:
+   ```markdown
+   ![AgentLens Live Workspace](docs/screenshots/live-workspace.png)
+   ```
+
+---
+
+## 8. Project Structure
+
+```text
+AgentLens/
+├── .env.example                    # Backend environment template
+├── pyrightconfig.json              # Pyright/Pylance path configuration
+├── pytest.ini                      # Pytest configuration
+├── render.yaml                     # Render deployment blueprint (Python 3.12.6 + 1 GB disk)
+├── requirements.txt                # Python dependencies
+├── DEMO_SCRIPT.md                  # Walkthrough script for live demos
+├── PROJECT_PROGRESS.md             # Engineering progress log
+├── backend/
+│   ├── run_goal.py                 # CLI runner for executing a single goal from terminal
+│   ├── app/
+│   │   ├── main.py                 # FastAPI app, CORS, rate-limit middleware, /health, /config, /concepts, /auth/me
+│   │   ├── auth.py                 # Firebase Admin initialization & Bearer/query token verification
+│   │   ├── config.py               # Environment-backed Settings and allowlists
+│   │   ├── db.py                   # SQLite WAL connection manager & schema migrations
+│   │   ├── events.py               # Event model, SSE serialization, EventBus pub/sub
+│   │   ├── golden_runs.py          # Seeds two recorded_demo showcase runs
+│   │   ├── guardrails.py           # Step, token, and wall-clock budget enforcement
+│   │   ├── llm.py                  # Gemini HTTP client, JSON repair, retry/backoff, fallback, offline simulation
+│   │   ├── middleware.py           # Per-IP rate limiting for POST /runs and POST /agents/{id}/test
+│   │   ├── orchestrator.py         # Hand-written multi-agent state machine & run_agent_task()
+│   │   ├── pricing.py              # Per-million-token cost table and estimator
+│   │   ├── agents/
+│   │   │   ├── base.py             # TaskDefinition, Plan, AgentResult, CriticEvaluation, AgentDefinition
+│   │   │   ├── registry.py         # User-scoped SQLite AgentRegistry & validation
+│   │   │   ├── planner.py          # Built-in Planner agent
+│   │   │   ├── researcher.py       # Built-in Researcher agent
+│   │   │   ├── coder.py            # Built-in Coder agent
+│   │   │   ├── critic.py           # Built-in Critic agent
+│   │   │   └── custom_agent.py     # Generic CustomAgentRunner for user-created agents
+│   │   ├── routes/
+│   │   │   ├── runs.py             # User-scoped /runs CRUD, SSE /events, /metrics, /trace
+│   │   │   ├── agents.py           # User-scoped /agents CRUD, /duplicate, /toggle, /history, /test
+│   │   │   └── tools.py            # Authenticated /tools metadata endpoints
+│   │   └── tools/
+│   │       ├── registry.py         # ToolDefinition metadata registry
+│   │       ├── search.py           # Tavily + DuckDuckGo web search
+│   │       ├── sandbox.py          # Subprocess Python sandbox with CPython audit hook & plot extraction
+│   │       ├── memory.py           # Run-scoped SQLite working memory
+│   │       └── faults.py           # Deterministic fault injection for reliability testing
+│   └── tests/
+│       ├── conftest.py             # Isolated temp DB, offline simulation, test environment setup
+│       ├── test_api.py             # API, SSE, metrics, trace, validation, rate limit tests
+│       ├── test_auth_isolation.py  # Firebase token enforcement & cross-user isolation tests
+│       ├── test_agents.py          # Registry and built-in/custom agent contract tests
+│       ├── test_llm.py             # LLM retry, JSON repair, fallback, and mode tests
+│       ├── test_orchestrator.py    # End-to-end orchestration, dependency, retry, and guardrail tests
+│       ├── test_pricing.py         # Token cost calculation tests
+│       ├── test_scenarios.py       # Five end-to-end showcase scenario tests
+│       └── test_tools.py           # Sandbox security, timeout, plot, search, and memory tests
+└── frontend/
+    ├── .env.example                # Frontend Vite & Firebase public config template
+    ├── index.html
+    ├── package.json                # React 19, Vite 6, Firebase 13, React Flow, Zustand
+    ├── vercel.json                 # Vercel SPA build & rewrite config
+    ├── vite.config.ts              # Dev server proxy (/runs, /agents, /tools, /health, /concepts, /config, /auth)
+    └── src/
+        ├── App.tsx                 # Auth-gated view router
+        ├── api/client.ts           # Authenticated fetch wrapper & SSE URL builder
+        ├── lib/firebase.ts         # Firebase Web SDK initialization
+        ├── store/
+        │   ├── useAppStore.ts      # Runs, events, agents, replay, theme state
+        │   └── useAuthStore.ts     # Firebase auth state, Email/Google sign-in, ID token retrieval
+        ├── components/
+        │   ├── layout/             # Navbar (auth profile + sign out), Sidebar
+        │   ├── graph/              # CustomAgentNode for React Flow
+        │   ├── workspace/          # ActivityTimeline, AgentInspector, CoderLive, StoryFeed
+        │   ├── NewRunModal.tsx     # Goal, budget, and fault-injection modal
+        │   └── WhyModal.tsx        # Educational concept modal
+        └── pages/
+            ├── LandingPage.tsx
+            ├── LearnPage.tsx
+            ├── AuthPage.tsx        # Email/Password + Google Sign-In & Registration
+            ├── DashboardPage.tsx
+            ├── LiveWorkspacePage.tsx
+            ├── AgentsPage.tsx
+            ├── CustomAgentBuilderPage.tsx
+            ├── EvaluationsPage.tsx
+            ├── ReplayPage.tsx
+            └── SettingsPage.tsx
+```
+
+---
+
+## 9. Prerequisites
+
+- **Python:** 3.10 – 3.14 (Render deployment targets `3.12.6`)
+- **Node.js:** 18+ (for Vite 6 and React 19)
+- **npm:** 9+ (bundled with Node.js)
+- **Firebase Project:** Required for user authentication (Email/Password and/or Google Sign-In)
+- **Gemini API Key (optional for local dev):** Obtain from [Google AI Studio](https://aistudio.google.com/apikey). If omitted, AgentLens runs in deterministic `offline_simulation` mode.
+- **Tavily API Key (optional):** Enables Tavily web search; otherwise falls back to DuckDuckGo.
+
+---
+
+## 10. Installation and Local Setup
+
+### 1. Clone the repository
+```bash
+git clone <your-repo-url> AgentLens
+cd AgentLens
+```
+
+### 2. Backend environment setup
+```bash
+python -m venv .venv
+# Linux / macOS:
+source .venv/bin/activate
+# Windows PowerShell:
+.venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
+```
+
+### 3. Configure environment variables
+```bash
+# Linux / macOS:
+cp .env.example .env
+cp frontend/.env.example frontend/.env
+
+# Windows PowerShell:
+Copy-Item .env.example .env
+Copy-Item frontend/.env.example frontend/.env
+```
+Fill in your `FIREBASE_PROJECT_ID` (and optional service account credentials) in `.env`, and your `VITE_FIREBASE_*` web config values in `frontend/.env` (see [Firebase Setup](#11-firebase-setup)). Optionally add `GEMINI_API_KEY`.
+
+### 4. Frontend dependencies
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### 5. Database initialization
+No separate migration command is required. Starting the FastAPI server automatically runs `init_db()` (creating SQLite WAL tables and migrating schemas), seeds built-in/template agents, and seeds the two `recorded_demo` golden runs.
+
+### 6. Start the backend and frontend
+Terminal 1 (Backend on port `8000`):
 ```bash
 uvicorn backend.app.main:app --reload --port 8000
 ```
 
-Frontend (second terminal):
-
+Terminal 2 (Frontend on port `3000`):
 ```bash
 cd frontend
-npm install
-npm run dev            # http://localhost:3000
+npm run dev
 ```
 
-The Vite dev server proxies `/runs`, `/agents`, `/tools`, `/config`, `/concepts` and `/health` to `127.0.0.1:8000`, so no `VITE_API_URL` is needed locally.
+Open `http://localhost:3000`. The Vite dev server proxies `/runs`, `/agents`, `/tools`, `/health`, `/concepts`, `/config`, and `/auth` to `http://127.0.0.1:8000`.
 
-### Run one goal from the CLI
-
+### Optional: CLI goal execution
+Run a single goal directly from the terminal (bypasses HTTP/auth and runs the orchestrator locally):
 ```bash
 python backend/run_goal.py "Benchmark three sorting algorithms on 10,000 items and explain the timings"
 ```
-
-The CLI seeds the registry, streams every event, and exits non-zero unless the stored run actually finished. Add `--mock` to force offline simulation.
-
-### Offline simulation
-
-With **no** `GEMINI_API_KEY`, runs use a deterministic simulation so the UI, replay and tests work without credentials. Those runs are labelled `llm_mode: "offline_simulation"` and cost `$0`. A configured key never silently degrades to simulation: provider failures surface as `LLMError` and appear in the run as `task_failed` / `run_failed` events.
+Add `--mock` to force offline simulation.
 
 ---
 
-## Configuration
+## 11. Firebase Setup
 
-All settings are environment variables; see `.env.example` for the full list.
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `GEMINI_API_KEY` | — | Enables live Gemini calls. Server-side only. |
-| `DEFAULT_MODEL` | `gemini-2.5-flash` | Model used when an agent does not specify one. |
-| `ALLOWED_MODELS` | current Gemini text models | Allowlist enforced for every request, including custom agents. |
-| `MODEL_FALLBACK_MODELS` | `gemini-3-flash-preview, gemini-3.1-flash-lite, gemini-3.5-flash` | Tried in order on 404/429/503 after retries; a model that failed is skipped for 10 minutes. Usage records the model that answered. |
-| `TAVILY_API_KEY` | — | Search provider; falls back to DuckDuckGo. |
-| `DB_PATH` | `agentlens.db` | SQLite file (WAL mode). |
-| `CORS_ORIGINS` | `*` | Comma-separated browser origins. Set explicit origins in production. |
-| `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` | 30 / 60 | Per-IP limit on `POST /runs` and agent test endpoints. |
-| `SANDBOX_TIMEOUT_SECONDS` | 20 | Hard wall-clock limit per Python execution. |
-| `MAX_STEPS_DEFAULT` / `MAX_TOKENS_DEFAULT` / `MAX_SECONDS_DEFAULT` | 25 / 60000 / 300 | Guardrail budgets per run. |
-| `MODEL_PRICING_JSON` | — | Overrides the built-in $/million-token price table. |
-
-`GET /config` exposes the non-secret subset (mode, default/allowed models, limits, pricing) and powers the Settings screen.
+1. **Create a Firebase project:** Go to the [Firebase Console](https://console.firebase.google.com/), click **Add project**, and follow the prompts.
+2. **Register a Web Application:**
+   - In **Project Settings → General → Your apps**, click the **Web (`</>`)** icon.
+   - Register the app (e.g., `agentlens-web`) and copy the `firebaseConfig` values into `frontend/.env` (`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`).
+3. **Enable Authentication providers:**
+   - Go to **Build → Authentication → Sign-in method**.
+   - Enable **Email/Password**.
+   - Enable **Google** (select a project support email and save).
+4. **Configure Authorized Domains:**
+   - In **Authentication → Settings → Authorized domains**, ensure `localhost` and `127.0.0.1` are listed for local development, and add your production Vercel domain (e.g., `your-app.vercel.app`) before deploying.
+5. **Create Backend Service Credentials:**
+   - For verifying Firebase ID tokens, the backend needs `FIREBASE_PROJECT_ID` at minimum.
+   - For full Firebase Admin SDK service-account authentication (recommended in production), go to **Project Settings → Service accounts → Generate new private key**, download the JSON file, and either:
+     - Local dev: save it outside git (never commit it) and set `FIREBASE_CREDENTIALS_PATH=/path/to/serviceAccountKey.json` in `.env`.
+     - Render/Cloud: paste the minified JSON content into `FIREBASE_CREDENTIALS_JSON` in your host's secret environment variables.
 
 ---
 
-## Architecture
+## 12. Environment Variables
 
+### Backend (`.env`) — Private Server Configuration
+| Variable | Default | Required | Description |
+|---|---|---|---|
+| `FIREBASE_PROJECT_ID` | — | Yes (for Auth) | Firebase project ID used by `firebase-admin` to verify ID tokens. |
+| `FIREBASE_CREDENTIALS_PATH` | — | Optional | Local filesystem path to a Firebase service account JSON file. |
+| `FIREBASE_CREDENTIALS_JSON` | — | Optional | Raw JSON string of the Firebase service account (recommended on Render). |
+| `GEMINI_API_KEY` | — | Optional | Google AI Studio API key. Empty = deterministic `offline_simulation`. |
+| `TAVILY_API_KEY` | — | Optional | Tavily web search key. Empty = DuckDuckGo fallback. |
+| `DEFAULT_MODEL` | `gemini-2.5-flash` | No | Default Gemini model when an agent omits one. |
+| `ALLOWED_MODELS` | `gemini-2.5-flash,gemini-2.5-pro,gemini-3-flash-preview,gemini-3.5-flash,gemini-3.1-flash-lite` | No | Model allowlist enforced across built-in and custom agents. |
+| `MODEL_FALLBACK_MODELS` | `gemini-3-flash-preview,gemini-3.1-flash-lite,gemini-3.5-flash` | No | Fallback models tried in order on `404`/`429`/`503`. |
+| `ALLOW_OFFLINE_SIMULATION` | `true` | No | Enables offline simulation when `GEMINI_API_KEY` is unset. |
+| `LLM_TIMEOUT_SECONDS` | `60` | No | Per-LLM HTTP request timeout. |
+| `LLM_MAX_ATTEMPTS` | `3` | No | Retry attempts per LLM call. |
+| `LLM_REPAIR_ATTEMPTS` | `1` | No | JSON repair attempts on malformed structured output. |
+| `MODEL_PRICING_JSON` | — | Optional | JSON override for $/million-token pricing table. |
+| `SEARCH_TIMEOUT_SECONDS` | `8` | No | Timeout for web search requests. |
+| `DB_PATH` | `agentlens.db` | No | SQLite database path (use persistent disk path in production). |
+| `APP_ENV` | `development` | No | Application environment label. |
+| `CORS_ORIGINS` | `*` (`.env.example`: `http://localhost:3000,http://127.0.0.1:3000`) | Prod: Yes | Comma-separated allowed origins. Set exact frontend origin in production. |
+| `RATE_LIMIT_REQUESTS` | `30` | No | Max `POST /runs` + `POST /agents/{id}/test` requests per window per IP. |
+| `RATE_LIMIT_WINDOW_SECONDS` | `60` | No | Rate-limit window in seconds. |
+| `SANDBOX_TIMEOUT_SECONDS` | `20` | No | Hard wall-clock timeout per Python sandbox execution. |
+| `SANDBOX_MAX_OUTPUT_CHARS` | `10000` | No | Truncation cap for sandbox `stdout`/`stderr`. |
+| `MAX_STEPS_DEFAULT` | `25` | No | Default step budget per run. |
+| `MAX_TOKENS_DEFAULT` | `60000` | No | Default token budget per run. |
+| `MAX_SECONDS_DEFAULT` | `300` | No | Default wall-clock budget per run. |
+| `MAX_RETRIES_DEFAULT` | `2` | No | Default max Critic retries per task. |
+
+### Frontend (`frontend/.env`) — Public Client Configuration
+All `VITE_*` variables are bundled into the browser build and are **public** by design:
+
+| Variable | Default | Required | Description |
+|---|---|---|---|
+| `VITE_API_URL` | `""` (empty) | Prod: Yes | Backend base URL (e.g., `https://agentlens-backend.onrender.com`). Leave empty locally to use Vite's proxy. |
+| `VITE_FIREBASE_API_KEY` | — | Yes | Public Firebase Web API key. |
+| `VITE_FIREBASE_AUTH_DOMAIN` | — | Yes | Firebase Auth domain (`<project>.firebaseapp.com`). |
+| `VITE_FIREBASE_PROJECT_ID` | — | Yes | Firebase project ID. |
+| `VITE_FIREBASE_STORAGE_BUCKET` | — | Optional | Firebase storage bucket. |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | — | Optional | Firebase messaging sender ID. |
+| `VITE_FIREBASE_APP_ID` | — | Yes | Firebase web app ID. |
+
+---
+
+## 13. Usage Guide
+
+1. **Register or Sign In:** Click **Sign in** in the navbar (or navigate to any workspace page) to register with Email/Password or continue with Google.
+2. **Explore Recorded Demo Runs:** On **My Runs** (`DashboardPage`), two pre-seeded `recorded_demo` runs are available immediately to inspect the graph, timeline, and evaluations.
+3. **Create & Configure Custom Agents:** Open **Build an Agent** (`CustomAgentBuilderPage`) to define a custom agent's name, role, instructions, model, temperature, allowed tools, JSON output schema, and execution limits. Use **Meet the Agents** (`AgentsPage`) to toggle, duplicate, test in isolation, or view per-agent execution history.
+4. **Start a Run:** Click **Ask AgentLens** (`NewRunModal`), enter a goal, adjust guardrail budgets or fault injection settings if desired, and launch.
+5. **Monitor the Live Graph & Events:** Watch the **Watch Live** (`LiveWorkspacePage`) React Flow graph, activity timeline, story feed, and **Coder Live** sandbox output update in real time over SSE.
+6. **Evaluate Results:** Open **Scores** (`EvaluationsPage`) to review computed token usage, cost estimates, latency, critic scores, retry counts, and per-agent breakdowns.
+7. **Replay & Export Traces:** Open **Replay a Run** (`ReplayPage`) to scrub through historical events step-by-step, or download the complete JSON trace from `/runs/{id}/trace`.
+
+---
+
+## 14. API Documentation
+
+All protected endpoints require a valid Firebase ID token via `Authorization: Bearer <FIREBASE_ID_TOKEN>`. Because browser `EventSource` does not support custom headers, `GET /runs/{run_id}/events` also accepts `?token=<FIREBASE_ID_TOKEN>`.
+
+| Method | Endpoint | Auth | Purpose | Key Parameters |
+|---|---|---|---|---|
+| `GET` | `/health` | Public | Liveness & LLM mode status | — |
+| `GET` | `/config` | Public | Non-secret config, auth status, limits, pricing | — |
+| `GET` | `/concepts` | Public | Educational AI concepts list | — |
+| `GET` | `/auth/me` | Bearer | Returns verified Firebase user (`uid`, `email`, `name`, `picture`) | — |
+| `POST` | `/runs` | Bearer | Create & start a run (rate-limited) | JSON: `goal`, optional `config`, `fault_injection` |
+| `GET` | `/runs` | Bearer | List authenticated user's runs + public demo runs | Query: `limit` (1–500) |
+| `GET` | `/runs/{run_id}` | Bearer | Get run details & totals (owner or public demo only) | Path: `run_id` |
+| `GET` | `/runs/{run_id}/events` | Bearer or `?token=` | Resumable SSE event stream | Header `Last-Event-ID` or query `last_event_id` |
+| `GET` | `/runs/{run_id}/metrics` | Bearer | Event-derived tokens, cost, latency, critic scores, per-agent stats | Path: `run_id` |
+| `GET` | `/runs/{run_id}/trace` | Bearer | Full JSON trace export (no secrets) | Path: `run_id` |
+| `GET` | `/agents` | Bearer | List system agents + user's custom agents | Query: `agent_type`, `enabled_only` |
+| `GET` | `/agents/{agent_id}` | Bearer | Get single agent definition | Path: `agent_id` |
+| `POST` | `/agents` | Bearer | Create a user-owned custom agent | JSON: `name`, `description`, `role`, `instructions`, `llm_config`, `allowed_tools`, `output_schema`, `execution_limits`, `enabled` |
+| `PUT` | `/agents/{agent_id}` | Bearer | Update user-owned custom agent (`403` for system/template) | Path: `agent_id`, partial update JSON |
+| `DELETE` | `/agents/{agent_id}` | Bearer | Delete user-owned custom agent (`400` built-in, `403` template) | Path: `agent_id` |
+| `POST` | `/agents/{agent_id}/duplicate` | Bearer | Clone any visible agent into a user-owned custom agent | Path: `agent_id` |
+| `POST` | `/agents/{agent_id}/toggle` | Bearer | Toggle user-owned custom agent enabled state | Path: `agent_id` |
+| `GET` | `/agents/{agent_id}/history` | Bearer | Agent's execution history scoped to user's runs + public demos | Query: `limit` (1–50) |
+| `POST` | `/agents/{agent_id}/test` | Bearer | Isolated single-agent test (rate-limited) | JSON: `test_prompt` |
+| `GET` | `/tools` | Bearer | List registered tool metadata | — |
+| `GET` | `/tools/{tool_name}` | Bearer | Get metadata for a specific tool | Path: `tool_name` |
+
+### Example Authenticated Request
+```bash
+curl -X POST http://127.0.0.1:8000/runs \
+  -H "Authorization: Bearer <FIREBASE_ID_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"goal": "Compare quicksort and mergesort on 5,000 integers"}'
 ```
-Goal
-  │
-  ▼
-Planner ──► Plan (tasks, dependencies, assigned agents)
-  │
-  ▼
-Orchestrator (hand-rolled state machine)
-  ├─ resolves dependency order, timeouts, guardrails
-  ├─ dispatches any registered agent through one contract
-  ├─ Critic evaluates each output; bounded retries with feedback
-  ├─ persists every event before streaming it
-  └─ composes a deterministic final answer from stored results
-  │
-  ▼
-SQLite (runs, events, agents, memory)  ──►  SSE /runs/{id}/events
-                                            ├─ Last-Event-ID resume
-                                            ├─ metrics derived from events
-                                            └─ full JSON trace export
-```
-
-| Layer | Location |
-|---|---|
-| FastAPI app, CORS, rate limiting, error shape | `backend/app/main.py`, `middleware.py` |
-| Orchestrator | `backend/app/orchestrator.py` |
-| Event model, bus, SSE ordering | `backend/app/events.py` |
-| Agent contract, registry, built-ins, custom runner | `backend/app/agents/` |
-| LLM client, retries, fallback, repair | `backend/app/llm.py` |
-| Pricing | `backend/app/pricing.py` |
-| Tools: sandbox, search, memory, faults | `backend/app/tools/` |
-| Routes: runs, agents, tools | `backend/app/routes/` |
-| React app, store, pages, graph, Coder Live | `frontend/src/` |
-
-### Agent contract
-
-Every agent — built-in or custom — is an `AgentDefinition` with the same fields and runs through `run_agent_task()`:
-
-```text
-agent_id, name, description, role, instructions
-llm_config{model, temperature}
-allowed_tools[]        # enforced server-side per call
-output_schema          # JSON Schema; becomes a validated Pydantic model
-execution_limits{max_steps, timeout_seconds}
-agent_type             # built_in | custom
-enabled
-```
-
-Agent results carry structured output, a summary, timing, and the model actually used. The Planner is given the live registry (enabled agents only) and may assign any of them, so mixed built-in/custom workflows work without code changes. The offline simulator assigns matching security/test/verification agents to dependent tasks so those workflows can be exercised without a key.
-
-### Events
-
-`Event` fields: `id` (monotonic per run), `run_id`, `ts`, `type`, `agent_id`, `agent_category`, `task_id`, `payload`, `concept`, `usage`. Event types cover `run_started`, `plan_created`, `task_started`, `agent_started`, `thought`, `tool_call`, `tool_result`, `artifact`, `critique`, `retry`, `memory_read`, `memory_write`, `task_done`, `task_failed`, `final_answer`, `run_finished`, `run_failed`, and fault/guardrail events.
-
-SSE frames are `id: N` + `data: {...}`, with `retry: 3000`. The endpoint subscribes before replaying persisted events, supports `Last-Event-ID` / `last_event_id`, closes on terminal events, and keeps events available after a client disconnects. Replay and trace export read stored events only.
-
-Agent "thoughts" are deliberately short decision summaries; raw chain-of-thought is not stored or shown.
 
 ---
 
-## Custom agents
+## 15. Testing
 
-Create, edit, duplicate, enable/disable, delete and test agents from the UI or the API.
-
-- Configurations persist in SQLite and register immediately.
-- Disabled agents are rejected by the test endpoint and excluded from plans.
-- Tool permissions are checked on the server for every tool call (not in the browser).
-- Every execution emits the same events as built-in agents, so custom agents appear in the graph, timeline, metrics and history.
-- `GET /agents/{id}/history` lists that agent's recorded executions (run, task, status, counts, critic score).
-- Output schemas are JSON Schema objects edited in the builder; the runtime turns them into Pydantic models and the offline simulator fills declared fields.
-
-No arbitrary user Python is uploaded or executed as agent code. Custom agents are configuration only. MCP is intentionally out of scope for this release.
-
----
-
-## API
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `POST` | `/runs` | Create and start a run (`goal`, optional guardrail/fault config). Rate limited. |
-| `GET` | `/runs` | List runs (most recent first). |
-| `GET` | `/runs/{id}` | Run summary + totals. |
-| `GET` | `/runs/{id}/events` | SSE stream (resumable). |
-| `GET` | `/runs/{id}/metrics` | Per-run and per-agent metrics derived from events: tokens, cost, latency, steps, tool calls, retries, critic scores, budget. |
-| `GET` | `/runs/{id}/trace` | Full JSON trace (no secrets). |
-| `GET` | `/agents` | List agents (`agent_type`, `enabled_only`). |
-| `POST` / `PUT` / `DELETE` | `/agents`, `/agents/{id}` | CRUD (built-ins protected from deletion). |
-| `POST` | `/agents/{id}/duplicate`, `/agents/{id}/toggle` | Clone or enable/disable. |
-| `GET` | `/agents/{id}/history` | Recent executions of one agent. |
-| `POST` | `/agents/{id}/test` | Isolated single-agent test. Disabled and system agents are rejected; rate limited. |
-| `GET` | `/tools`, `/tools/{name}` | Tool registry metadata. |
-| `GET` | `/config` | Public configuration and pricing. |
-| `GET` | `/concepts`, `/health` | Educational concept list, liveness. |
-
-Errors use stable status codes (`400` validation, `404` missing, `409` conflict, `429` rate limit) and never include API keys or stack traces.
-
----
-
-## Evaluation and cost
-
-`/runs/{id}/metrics` and the Evaluations screen are computed from persisted events, not from frontend estimates:
-
-- input/output tokens, model, latency per call (from each event's `usage`),
-- estimated cost via the configurable price table,
-- steps (action events only), tool calls, retries, critic scores,
-- guardrail consumption versus limits,
-- per-agent breakdown.
-
-Golden demo runs are pre-seeded from their stored events and labelled `recorded_demo`; they are never presented as live telemetry. Unknown models are priced with the table's `default` entry, so treat cost as an estimate and verify rates with your provider.
-
----
-
-## Security model
-
-- **API keys** live only in backend environment variables. They are never returned by `/config`, trace export, logs or the browser bundle.
-- **Input validation** via Pydantic models on every route; agent definitions are validated (tool names, model allowlist, schema shape, limits).
-- **Prompt injection**: retrieved web content and custom instructions are agent-level context only. They cannot change platform system instructions, guardrails, tool permissions or allowlists, which are enforced in code.
-- **Tool permissions** are checked server-side for built-in and custom agents.
-- **Memory isolation**: memory rows are keyed by `run_id`; agents can only read/write the current run.
-- **Rate limiting** per client IP on expensive POST routes.
-- **Sandbox** (`backend/app/tools/sandbox.py`), defence in depth:
-  1. static rejection of obvious escapes,
-  2. a child interpreter in a throwaway directory with a stripped environment,
-  3. an in-child CPython audit hook that blocks process creation, sockets, network requests and writes/deletes outside the sandbox,
-  4. POSIX resource limits (CPU, address space, file size, open files) and a wall-clock timeout that kills the process group,
-  5. output caps and parent-side plot extraction.
-- **Remaining limitations** (documented honestly):
-  - This is process isolation, not a container/VM boundary. Untrusted multi-tenant code needs gVisor, Firecracker or a hosted sandbox such as Piston.
-  - `rlimits` are POSIX-only; on Windows the timeout and audit hook are the enforced layers.
-  - The audit hook is enforced by CPython; a memory-corruption exploit in a native extension is out of scope for it.
-  - The API is single-tenant and unauthenticated by design. Put it behind an authenticated proxy before exposing it publicly.
-
----
-
-## Tests
-
+### Backend Unit, Integration, Scenario & Auth Isolation Tests
 ```bash
 python -m pytest backend/tests -q
 ```
+The test suite (`backend/tests/conftest.py`) isolates state into a temporary SQLite database, clears `GEMINI_API_KEY` to enforce offline simulation, disables rate limiting, and tests:
+- `test_auth_isolation.py` — `401` enforcement on unauthenticated/invalid/expired tokens, `?token=` SSE auth, and strict cross-user isolation for runs, metrics, traces, SSE streams, and custom agents.
+- `test_api.py` — API validation, SSE history/resume, trace-to-metrics consistency, agent CRUD, and rate-limit middleware.
+- `test_orchestrator.py` & `test_scenarios.py` — Dependency ordering, retries, guardrails, fault recovery, and 5 showcase scenarios.
+- `test_llm.py`, `test_agents.py`, `test_tools.py`, `test_pricing.py` — LLM repair/fallback, sandbox audit hook/timeout/plot capture, memory isolation, and pricing.
 
-Current result: **51 passed** (~3 minutes on Windows; most time is real sandbox execution and search timeouts in offline runs).
-
-Coverage includes: LLM client (retries, repair, fallback, offline labelling), pricing, sandbox execution/security/timeout/plot artifact, search unavailable handling, fault injection, memory isolation, registry CRUD/validation, agent contract, orchestrator end-to-end, dependency ordering, graceful task failure, guardrails, Break-it recovery, SSE resume, trace export, metrics, rate limiting, custom-agent API validation, and five showcase scenarios (research, coding artifact, custom fact-checker, security+testing agents, replay determinism) in `backend/tests/test_scenarios.py`.
-
-Tests isolate state: `backend/tests/conftest.py` points `DB_PATH` at a temp directory, clears `GEMINI_API_KEY`, enables offline simulation, disables rate limits and shortens search timeouts.
-
-There is no frontend unit-test suite; the frontend is verified by `tsc` + `vite build`. Do not treat the build as a functional test of interactions.
+### Frontend Type-Check & Production Build
+There is no frontend unit-test runner configured; frontend integrity is verified with TypeScript type-checking and Vite production bundling:
+```bash
+cd frontend
+npm run build
+```
 
 ---
 
-## Deployment
+## 16. Deployment
 
 ### Backend on Render
-
-`render.yaml` is ready: Python 3.12, health check on `/health`, and a 1 GB disk mounted at `/var/data` with `DB_PATH=/var/data/agentlens.db`.
-
-- Set `GEMINI_API_KEY` and, optionally, `TAVILY_API_KEY` in the Render dashboard.
-- Set `CORS_ORIGINS` to the exact Vercel origin (for example `https://agentlens.vercel.app`). Do not leave `*` in production.
-- SQLite must be on the persistent disk. **Without a disk (or on a free instance that does not offer one), every deploy/restart loses runs, agents and traces.** For multi-instance or long-term production use, migrate the storage layer to PostgreSQL; the event-sourced schema maps directly (runs, events, agents, memory).
-- The container is not a hardened sandbox host: if you allow untrusted users, move code execution to a VM-based runner.
+`render.yaml` configures a Python `3.12.6` web service with `/health` check and a 1 GB persistent disk at `/var/data` (`DB_PATH=/var/data/agentlens.db`):
+1. Connect the repository in Render using `render.yaml`.
+2. Set secret environment variables in the Render dashboard:
+   - `FIREBASE_PROJECT_ID`
+   - `FIREBASE_CREDENTIALS_JSON` (raw service account JSON)
+   - `GEMINI_API_KEY` (and optionally `TAVILY_API_KEY`)
+   - `CORS_ORIGINS` set to your exact Vercel origin (e.g., `https://your-agentlens.vercel.app`) — never leave `*` in production.
+3. Keep `DB_PATH` on the persistent disk (`/var/data/agentlens.db`); without persistent storage, deploys and restarts erase SQLite runs and custom agents.
 
 ### Frontend on Vercel
-
-- Root directory: `frontend`. Build: `npm run build`. Output: `dist` (see `frontend/vercel.json`, which also rewrites SPA routes to `index.html`).
-- Set `VITE_API_URL=https://<your-render-service>` in Vercel's environment variables; the client appends `/runs`, `/agents`, etc.
-- Redeploy after changing the backend URL so the value is baked into the bundle.
-
-Never commit `.env`; `.env.example` contains placeholders only.
+`frontend/vercel.json` builds with `npm run build`, outputs `dist`, and rewrites SPA routes to `/index.html`:
+1. Import the project in Vercel with **Root Directory** set to `frontend`.
+2. Set `VITE_API_URL=https://<your-render-service>.onrender.com` and all `VITE_FIREBASE_*` variables in Vercel Environment Variables.
+3. Add your Vercel deployment domain to **Firebase Console → Authentication → Settings → Authorized domains**.
+4. Redeploy after changing any `VITE_*` variable so Vite bakes it into the bundle.
 
 ---
 
-## Project layout
+## 17. Security
 
-```
-backend/
-  app/
-    agents/       base contract, registry, planner, researcher, coder, critic, custom runner
-    routes/       runs (incl. SSE, metrics, trace), agents (incl. history, test), tools
-    tools/        sandbox, search, memory, faults, registry
-    config.py db.py events.py llm.py orchestrator.py guardrails.py pricing.py middleware.py
-  tests/          51 tests including showcase scenarios
-  run_goal.py     CLI smoke test / demo
-frontend/
-  src/            api, components, pages, store, types
-  vite.config.ts  dev proxy
-render.yaml       Render blueprint
-```
+- **Firebase ID Token Verification:** Every protected REST and SSE route verifies the user's Firebase JWT via `firebase-admin` (`backend/app/auth.py`). Unauthenticated, malformed, revoked, or expired tokens are rejected with `401`.
+- **User-Level Resource Isolation:** `runs` and custom `agents` store `user_id`. Queries filter by `user_id = current_user.uid` (plus read-only `is_public = 1` golden demo runs and `user_id = 'system'` read-only built-in/template agents), returning `404` for another user's private resources and `403` when attempting to mutate shared system templates.
+- **Tool Permissions:** `tool_permitted()` enforces `allowed_tools` server-side on every tool call.
+- **Execution Guardrails:** `GuardrailManager` enforces `max_steps`, `max_tokens`, and `max_seconds` in code.
+- **Python Sandbox Restrictions:** `backend/app/tools/sandbox.py` combines static pattern rejection, a throwaway working directory with a stripped environment, an in-child CPython `sys.addaudithook` blocking subprocess creation, sockets/network, and out-of-sandbox writes, POSIX `rlimits` (where supported), and a hard wall-clock timeout. *(Note: this is process isolation, not a VM/container boundary—use gVisor/Firecracker/Piston for untrusted multi-tenant code execution.)*
+- **API Key Handling:** `GEMINI_API_KEY`, `TAVILY_API_KEY`, and `FIREBASE_CREDENTIALS_JSON` remain strictly on the backend and are never exposed by `/config`, traces, logs, or the frontend bundle.
 
-## Roadmap (not in this release)
+---
 
-MCP integration, external agent APIs, more LLM providers, parallel task execution, richer evaluation suites, PostgreSQL storage, containerized sandboxing.
+## 18. Roadmap
 
-## License
+Planned future improvements (not included in the current release):
+- Model Context Protocol (MCP) tool & server integration
+- External agent connectivity / webhook-based remote agents
+- Additional LLM providers beyond Google Gemini
+- Expanded automated evaluation suites and regression benchmarks
+- Parallel execution for independent DAG branches
+- PostgreSQL storage backend and containerized/VM-isolated code sandboxing
+- Automated frontend unit and E2E test suite
 
-MIT.
+---
+
+## 19. Contributing
+
+Contributions are welcome:
+1. Fork the repository and create a feature branch from `main`.
+2. Make focused changes following existing backend (`backend/app/`) and frontend (`frontend/src/`) patterns.
+3. Verify your changes before opening a pull request:
+   ```bash
+   python -m pytest backend/tests -q
+   cd frontend && npm run build
+   ```
+4. Never commit `.env` files, SQLite databases, or Firebase service account JSON keys.
+
+---
+
+## 20. License
+
+No `LICENSE` file is currently present in this repository. All rights are reserved by the repository owner until an explicit license file is added.

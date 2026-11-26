@@ -9,6 +9,7 @@ import {
   ToolDefinition,
   FaultConfig,
 } from '../types';
+import { useAuthStore } from '../store/useAuthStore';
 
 /**
  * In development Vite proxies `/runs`, `/agents`, ... to the FastAPI server.
@@ -26,9 +27,15 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = await useAuthStore.getState().getIdToken();
+  const headers = new Headers(init?.headers || {});
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, init);
+    response = await fetch(`${API_BASE}${path}`, { ...init, headers });
   } catch {
     throw new ApiError(
       `Cannot reach the AgentLens API at ${API_BASE || window.location.origin}. Is the backend running?`,
@@ -58,9 +65,12 @@ function jsonInit(method: string, body?: unknown): RequestInit {
   };
 }
 
-export function streamUrl(runId: string, lastEventId?: number): string {
-  const suffix = lastEventId && lastEventId > 0 ? `?last_event_id=${lastEventId}` : '';
-  return `${API_BASE}/runs/${runId}/events${suffix}`;
+export function streamUrl(runId: string, token?: string | null, lastEventId?: number): string {
+  const params = new URLSearchParams();
+  if (token) params.set('token', token);
+  if (lastEventId && lastEventId > 0) params.set('last_event_id', String(lastEventId));
+  const query = params.toString();
+  return `${API_BASE}/runs/${runId}/events${query ? `?${query}` : ''}`;
 }
 
 export const fetchRuns = () => request<RunSummary[]>('/runs');

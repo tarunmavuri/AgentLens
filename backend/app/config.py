@@ -98,6 +98,11 @@ class Settings(BaseModel):
     # Storage -------------------------------------------------------------------
     db_path: str = os.getenv("DB_PATH", "agentlens.db")
 
+    # Authentication (Firebase) -------------------------------------------------
+    firebase_project_id: str = os.getenv("FIREBASE_PROJECT_ID", "")
+    firebase_credentials_path: str = os.getenv("FIREBASE_CREDENTIALS_PATH", "")
+    firebase_credentials_json: str = os.getenv("FIREBASE_CREDENTIALS_JSON", "")
+
     # HTTP ----------------------------------------------------------------------
     cors_origins: list[str] = Field(
         default_factory=lambda: _env_list("CORS_ORIGINS", ["*"])
@@ -159,6 +164,12 @@ class Settings(BaseModel):
             "environment": self.environment,
             "llm_mode": self.llm_mode,
             "llm_configured": self.llm_configured,
+            "auth_provider": "firebase",
+            "auth_configured": bool(
+                self.firebase_project_id.strip()
+                or self.firebase_credentials_path.strip()
+                or self.firebase_credentials_json.strip()
+            ),
             "default_model": self.default_model,
             "allowed_models": self.usable_models,
             "search_provider": "tavily" if self.tavily_api_key else "duckduckgo",

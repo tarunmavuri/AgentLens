@@ -14,7 +14,7 @@ from typing import Any, Optional
 
 from backend.app.db import db_connection, get_meta, set_meta
 
-GOLDEN_VERSION = "3"
+GOLDEN_VERSION = "4"
 GOLDEN_RUN_IDS = ("golden-run-rag-vs-finetuning", "golden-run-sorting-benchmark")
 
 # (type, agent_id, category, task_id, payload, concept, usage)
@@ -164,11 +164,13 @@ def _insert_trace(
     totals = _totals(events)
     conn.execute(
         """
-        INSERT OR REPLACE INTO runs (id, goal, config_json, status, created_at, totals_json)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO runs (id, user_id, is_public, goal, config_json, status, created_at, totals_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             run_id,
+            "system",
+            1,
             goal,
             json.dumps({"is_golden": True, "llm_mode": "recorded_demo"}),
             "completed",
