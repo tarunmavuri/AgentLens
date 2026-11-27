@@ -29,14 +29,13 @@ export const App: React.FC = () => {
     loadAgents,
     clearUserData,
   } = useAppStore();
-  const { user, initialized, initAuthListener } = useAuthStore();
+  const { user, initialized, loadSession } = useAuthStore();
   const [isNewRunModalOpen, setIsNewRunModalOpen] = useState(false);
 
   useEffect(() => {
     setTheme(theme);
     loadConcepts();
-    const unsubscribe = initAuthListener();
-    return () => unsubscribe();
+    loadSession();
   }, []);
 
   useEffect(() => {

@@ -98,10 +98,17 @@ class Settings(BaseModel):
     # Storage -------------------------------------------------------------------
     db_path: str = os.getenv("DB_PATH", "agentlens.db")
 
-    # Authentication (Firebase) -------------------------------------------------
-    firebase_project_id: str = os.getenv("FIREBASE_PROJECT_ID", "")
-    firebase_credentials_path: str = os.getenv("FIREBASE_CREDENTIALS_PATH", "")
-    firebase_credentials_json: str = os.getenv("FIREBASE_CREDENTIALS_JSON", "")
+    # Authentication (Cloudflare Access) ----------------------------------------
+    cloudflare_team_domain: str = os.getenv("CLOUDFLARE_TEAM_DOMAIN", "")
+    cloudflare_access_aud: str = os.getenv("CLOUDFLARE_ACCESS_AUD", "")
+    allow_local_dev_auth: bool = Field(
+        default_factory=lambda: _env_bool(
+            "ALLOW_LOCAL_DEV_AUTH",
+            os.getenv("APP_ENV", "development").strip().lower() != "production",
+        )
+    )
+    local_dev_user_id: str = os.getenv("LOCAL_DEV_USER_ID", "local-dev-user")
+    local_dev_user_email: str = os.getenv("LOCAL_DEV_USER_EMAIL", "developer@localhost")
 
     # HTTP ----------------------------------------------------------------------
     cors_origins: list[str] = Field(
@@ -151,6 +158,12 @@ class Settings(BaseModel):
         return bool(self.gemini_api_key.strip())
 
     @property
+    def cloudflare_auth_configured(self) -> bool:
+        return bool(
+            self.cloudflare_team_domain.strip() and self.cloudflare_access_aud.strip()
+        )
+
+    @property
     def llm_mode(self) -> str:
         if self.llm_configured:
             return "gemini"
@@ -164,12 +177,9 @@ class Settings(BaseModel):
             "environment": self.environment,
             "llm_mode": self.llm_mode,
             "llm_configured": self.llm_configured,
-            "auth_provider": "firebase",
-            "auth_configured": bool(
-                self.firebase_project_id.strip()
-                or self.firebase_credentials_path.strip()
-                or self.firebase_credentials_json.strip()
-            ),
+            "auth_provider": "cloudflare_access" if self.cloudflare_auth_configured else "local_dev",
+            "auth_configured": self.cloudflare_auth_configured,
+            "cloudflare_team_domain": self.cloudflare_team_domain.strip(),
             "default_model": self.default_model,
             "allowed_models": self.usable_models,
             "search_provider": "tavily" if self.tavily_api_key else "duckduckgo",

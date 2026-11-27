@@ -160,5 +160,5 @@ def get_concepts():
 
 @app.get("/auth/me", response_model=AuthenticatedUser)
 def get_authenticated_user(current_user: AuthenticatedUser = Depends(get_current_user)):
-    """Return the verified Firebase user profile for the current bearer token."""
+    """Return the verified Cloudflare Access (or local dev) user profile."""
     return current_user

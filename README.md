@@ -8,7 +8,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Firebase](https://img.shields.io/badge/Firebase-Auth-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
+![Cloudflare Access](https://img.shields.io/badge/Cloudflare-Zero%20Trust%20Access-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)
 
 </div>
 
@@ -27,7 +27,7 @@ AgentLens is a **glass-box multi-agent AI platform** for creating, orchestrating
 7. [Project Structure](#8-project-structure)
 8. [Prerequisites](#9-prerequisites)
 9. [Installation and Local Setup](#10-installation-and-local-setup)
-10. [Firebase Setup](#11-firebase-setup)
+10. [Cloudflare Access Setup](#11-cloudflare-access-setup)
 11. [Environment Variables](#12-environment-variables)
 12. [Usage Guide](#13-usage-guide)
 13. [API Documentation](#14-api-documentation)
@@ -43,19 +43,19 @@ AgentLens is a **glass-box multi-agent AI platform** for creating, orchestrating
 ## 2. Project Overview
 
 ### What AgentLens Is
-AgentLens is a full-stack multi-agent orchestration and observability workbench built with **FastAPI**, **React 19**, **SQLite**, **Google Gemini**, and **Firebase Authentication**. Every execution ("run") is driven by a hand-written Python state machine that decomposes a user goal into dependent tasks, dispatches built-in and user-configured agents, evaluates outputs with a Critic, and records immutable events for live streaming and deterministic replay.
+AgentLens is a full-stack multi-agent orchestration and observability workbench built with **FastAPI**, **React 19**, **SQLite**, **Google Gemini**, and **Cloudflare Access**. Every execution ("run") is driven by a hand-written Python state machine that decomposes a user goal into dependent tasks, dispatches built-in and user-configured agents, evaluates outputs with a Critic, and records immutable events for live streaming and deterministic replay.
 
 ### What Problem It Solves
 Most agent frameworks obscure *why* an agent chose a tool, *how* much a retry loop cost, or *where* a multi-step workflow failed. AgentLens treats observability and evaluation as first-class primitives:
 - **No black-box orchestration:** There is no LangGraph or LangChain abstraction layer—every state transition is explicit, auditable Python (`backend/app/orchestrator.py`).
 - **Event-sourced telemetry:** Dashboard metrics, live graphs, and historical replays are all derived from the same persisted `events` table rather than client-side estimates.
-- **Multi-user isolation:** Authenticated Firebase users own their runs, custom agents, execution histories, and traces without cross-user leakage.
+- **Multi-user isolation:** Authenticated Cloudflare Access users own their runs, custom agents, execution histories, and traces without cross-user leakage.
 
 ### How Users Interact with Multiple Agents
-Users sign in, submit a natural-language goal (optionally configuring step/token/time budgets or fault injection), and watch the **Planner** build a dependency graph of tasks assigned to **Researcher**, **Coder**, or custom agents. As tasks execute, the **Live Workspace** renders the interactive node graph (`@xyflow/react`), live activity timeline, story feed, and **Coder Live** sandbox output/plots in real time.
+Users authenticate through Cloudflare Access (or local dev identity in development), submit a natural-language goal (optionally configuring step/token/time budgets or fault injection), and watch the **Planner** build a dependency graph of tasks assigned to **Researcher**, **Coder**, or custom agents. As tasks execute, the **Live Workspace** renders the interactive node graph (`@xyflow/react`), live activity timeline, story feed, and **Coder Live** sandbox output/plots in real time.
 
 ### How Custom Agents Extend the Platform
-Users can build custom agents directly in the UI (**Build an Agent**) by configuring a name, role, system instructions, Gemini model, temperature, allowed tools (`web_search`, `python_sandbox`, `read_memory`, `write_memory`), JSON output schema, and execution limits (`max_steps`, `timeout_seconds`). Custom agents are stored in SQLite, scoped to the creator's Firebase UID, and immediately available to the Planner alongside built-in agents—without uploading arbitrary Python code.
+Users can build custom agents directly in the UI (**Build an Agent**) by configuring a name, role, system instructions, Gemini model, temperature, allowed tools (`web_search`, `python_sandbox`, `read_memory`, `write_memory`), JSON output schema, and execution limits (`max_steps`, `timeout_seconds`). Custom agents are stored in SQLite, scoped to the creator's authenticated `uid`, and immediately available to the Planner alongside built-in agents—without uploading arbitrary Python code.
 
 ---
 
@@ -101,9 +101,10 @@ Users can build custom agents directly in the UI (**Build an Agent**) by configu
 - **Historical replay** scrubbing through persisted events step-by-step without re-invoking any LLM.
 
 ### Authentication & Data Isolation
-- **Firebase Authentication** supporting Email/Password registration & sign-in and Google Sign-In.
-- **Backend ID token verification** via `firebase-admin` on all protected API and SSE endpoints.
+- **Cloudflare Access (Zero Trust)** edge authentication with Email OTP, Google, GitHub, or configured IdP providers.
+- **Backend RS256 JWT verification** (`PyJWT[crypto]`) validating `Cf-Access-Jwt-Assertion` / `CF_Authorization` against Cloudflare's JWKS endpoint (`/cdn-cgi/access/certs`).
 - **Per-user data isolation** scoping runs, traces, metrics, custom agents, and agent execution histories to each authenticated user's `uid`.
+- **Local development fallback** (`ALLOW_LOCAL_DEV_AUTH=true` in non-production environments) so developers can run locally without a Cloudflare Tunnel.
 - **SQLite memory** (`memory` table keyed by `(run_id, key)`) and **full JSON trace export** (`GET /runs/{id}/trace`).
 
 ---
@@ -114,10 +115,10 @@ Users can build custom agents directly in the UI (**Build an Agent**) by configu
 
 ```mermaid
 flowchart LR
-    U["React Frontend (Vite + TypeScript)"] -->|"1. Sign In (Email/Password or Google)"| FA["Firebase Authentication"]
-    FA -->|"2. Firebase ID Token (JWT)"| U
-    U -->|"3. Authenticated REST (Authorization: Bearer)"| API["FastAPI Backend"]
-    API -->|"4. Verify ID Token"| FAA["Firebase Admin SDK"]
+    U["React Frontend (Vite + TypeScript)"] -->|"1. Edge Login (Email OTP / Google / IdP)"| CF["Cloudflare Zero Trust Access"]
+    CF -->|"2. Injects Cf-Access-Jwt-Assertion / CF_Authorization"| U
+    U -->|"3. Authenticated REST (credentials: include)"| API["FastAPI Backend"]
+    API -->|"4. Verify RS256 JWT via JWKS"| JWKS["Cloudflare /cdn-cgi/access/certs"]
     API -->|"5. Create / Query User-Scoped Runs & Agents"| ORCH["Agent Orchestrator (State Machine)"]
     ORCH -->|"Read Enabled Agents"| REG["Dynamic Agent Registry"]
     REG --> AGENTS["Planner / Researcher / Coder / Critic / Custom Agents"]
@@ -126,7 +127,7 @@ flowchart LR
     TOOLS --> SB["Python Sandbox (Subprocess + Audit Hook)"]
     TOOLS --> MEM["SQLite Working Memory (Run-Scoped)"]
     ORCH -->|"6. Persist Events Before Streaming"| DB[("SQLite Database (WAL Mode)")]
-    DB -->|"7. SSE Event Stream (?token=...&Last-Event-ID)"| U
+    DB -->|"7. SSE Event Stream (withCredentials + Last-Event-ID)"| U
 ```
 
 ### Execution Flow
@@ -205,10 +206,10 @@ Every agent—built-in or custom—is represented by `AgentDefinition` (`backend
 | **Graph Visualization** | React Flow (`@xyflow/react`) | `^12.4.2` | Live interactive agent dependency graph |
 | **State Management** | Zustand | `^5.0.3` | App state (`useAppStore`) & auth state (`useAuthStore`) |
 | **Icons** | Lucide React | `^1.16.0` | UI iconography |
-| **Frontend Auth SDK** | Firebase Web SDK | `firebase ^13.4.0` | Email/Password & Google Sign-In, ID token lifecycle |
+| **Edge Authentication** | Cloudflare Access (Zero Trust) | `Cf-Access-Jwt-Assertion` / `CF_Authorization` | Edge identity & SSO authentication |
 | **Backend Framework** | FastAPI + Uvicorn | `fastapi >=0.110.0`, `uvicorn >=0.28.0` | REST API, SSE streaming, lifespan management |
 | **Validation** | Pydantic | `>=2.6.0` | Request/response schemas & dynamic LLM output models |
-| **Backend Auth SDK** | Firebase Admin SDK | `firebase-admin >=6.5.0` | Server-side Firebase ID token verification |
+| **Backend JWT Verification** | PyJWT + Cryptography | `PyJWT[crypto] >=2.8.0` | RS256 Cloudflare Access JWT & JWKS verification |
 | **LLM Provider** | Google Gemini API (via `httpx`) | `httpx >=0.27.0` | Structured JSON generation, repair, and model fallback |
 | **Database** | SQLite (WAL mode) | Built-in Python `sqlite3` | Event-sourced `runs`, `events`, `agents`, `memory`, `meta` |
 | **Code Sandbox** | Python Subprocess + Matplotlib | `matplotlib >=3.8.0` | Isolated code execution, audit hook, chart capture |
@@ -248,7 +249,7 @@ AgentLens/
 │   ├── run_goal.py                 # CLI runner for executing a single goal from terminal
 │   ├── app/
 │   │   ├── main.py                 # FastAPI app, CORS, rate-limit middleware, /health, /config, /concepts, /auth/me
-│   │   ├── auth.py                 # Firebase Admin initialization & Bearer/query token verification
+│   │   ├── auth.py                 # Cloudflare Access JWKS/JWT verification & local dev fallback
 │   │   ├── config.py               # Environment-backed Settings and allowlists
 │   │   ├── db.py                   # SQLite WAL connection manager & schema migrations
 │   │   ├── events.py               # Event model, SSE serialization, EventBus pub/sub
@@ -279,7 +280,7 @@ AgentLens/
 │   └── tests/
 │       ├── conftest.py             # Isolated temp DB, offline simulation, test environment setup
 │       ├── test_api.py             # API, SSE, metrics, trace, validation, rate limit tests
-│       ├── test_auth_isolation.py  # Firebase token enforcement & cross-user isolation tests
+│       ├── test_auth_isolation.py  # Cloudflare Access JWT enforcement & cross-user isolation tests
 │       ├── test_agents.py          # Registry and built-in/custom agent contract tests
 │       ├── test_llm.py             # LLM retry, JSON repair, fallback, and mode tests
 │       ├── test_orchestrator.py    # End-to-end orchestration, dependency, retry, and guardrail tests
@@ -287,18 +288,17 @@ AgentLens/
 │       ├── test_scenarios.py       # Five end-to-end showcase scenario tests
 │       └── test_tools.py           # Sandbox security, timeout, plot, search, and memory tests
 └── frontend/
-    ├── .env.example                # Frontend Vite & Firebase public config template
+    ├── .env.example                # Frontend Vite & Cloudflare logout config template
     ├── index.html
-    ├── package.json                # React 19, Vite 6, Firebase 13, React Flow, Zustand
+    ├── package.json                # React 19, Vite 6, React Flow, Zustand
     ├── vercel.json                 # Vercel SPA build & rewrite config
     ├── vite.config.ts              # Dev server proxy (/runs, /agents, /tools, /health, /concepts, /config, /auth)
     └── src/
         ├── App.tsx                 # Auth-gated view router
-        ├── api/client.ts           # Authenticated fetch wrapper & SSE URL builder
-        ├── lib/firebase.ts         # Firebase Web SDK initialization
+        ├── api/client.ts           # Credentialed fetch wrapper & SSE URL builder
         ├── store/
         │   ├── useAppStore.ts      # Runs, events, agents, replay, theme state
-        │   └── useAuthStore.ts     # Firebase auth state, Email/Google sign-in, ID token retrieval
+        │   └── useAuthStore.ts     # Cloudflare Access session & logout state
         ├── components/
         │   ├── layout/             # Navbar (auth profile + sign out), Sidebar
         │   ├── graph/              # CustomAgentNode for React Flow
@@ -308,7 +308,7 @@ AgentLens/
         └── pages/
             ├── LandingPage.tsx
             ├── LearnPage.tsx
-            ├── AuthPage.tsx        # Email/Password + Google Sign-In & Registration
+            ├── AuthPage.tsx        # Cloudflare Access session verification screen
             ├── DashboardPage.tsx
             ├── LiveWorkspacePage.tsx
             ├── AgentsPage.tsx
@@ -325,7 +325,7 @@ AgentLens/
 - **Python:** 3.10 – 3.14 (Render deployment targets `3.12.6`)
 - **Node.js:** 18+ (for Vite 6 and React 19)
 - **npm:** 9+ (bundled with Node.js)
-- **Firebase Project:** Required for user authentication (Email/Password and/or Google Sign-In)
+- **Cloudflare Zero Trust Account (for production):** Required to enforce Cloudflare Access edge authentication (local dev works out of the box with `ALLOW_LOCAL_DEV_AUTH=true`)
 - **Gemini API Key (optional for local dev):** Obtain from [Google AI Studio](https://aistudio.google.com/apikey). If omitted, AgentLens runs in deterministic `offline_simulation` mode.
 - **Tavily API Key (optional):** Enables Tavily web search; otherwise falls back to DuckDuckGo.
 
@@ -360,7 +360,7 @@ cp frontend/.env.example frontend/.env
 Copy-Item .env.example .env
 Copy-Item frontend/.env.example frontend/.env
 ```
-Fill in your `FIREBASE_PROJECT_ID` (and optional service account credentials) in `.env`, and your `VITE_FIREBASE_*` web config values in `frontend/.env` (see [Firebase Setup](#11-firebase-setup)). Optionally add `GEMINI_API_KEY`.
+Fill in `CLOUDFLARE_TEAM_DOMAIN` and `CLOUDFLARE_ACCESS_AUD` in `.env` for production Cloudflare Access (or keep `ALLOW_LOCAL_DEV_AUTH=true` for local development). Optionally add `GEMINI_API_KEY`.
 
 ### 4. Frontend dependencies
 ```bash
@@ -395,23 +395,20 @@ Add `--mock` to force offline simulation.
 
 ---
 
-## 11. Firebase Setup
+## 11. Cloudflare Access Setup
 
-1. **Create a Firebase project:** Go to the [Firebase Console](https://console.firebase.google.com/), click **Add project**, and follow the prompts.
-2. **Register a Web Application:**
-   - In **Project Settings → General → Your apps**, click the **Web (`</>`)** icon.
-   - Register the app (e.g., `agentlens-web`) and copy the `firebaseConfig` values into `frontend/.env` (`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`).
-3. **Enable Authentication providers:**
-   - Go to **Build → Authentication → Sign-in method**.
-   - Enable **Email/Password**.
-   - Enable **Google** (select a project support email and save).
-4. **Configure Authorized Domains:**
-   - In **Authentication → Settings → Authorized domains**, ensure `localhost` and `127.0.0.1` are listed for local development, and add your production Vercel domain (e.g., `your-app.vercel.app`) before deploying.
-5. **Create Backend Service Credentials:**
-   - For verifying Firebase ID tokens, the backend needs `FIREBASE_PROJECT_ID` at minimum.
-   - For full Firebase Admin SDK service-account authentication (recommended in production), go to **Project Settings → Service accounts → Generate new private key**, download the JSON file, and either:
-     - Local dev: save it outside git (never commit it) and set `FIREBASE_CREDENTIALS_PATH=/path/to/serviceAccountKey.json` in `.env`.
-     - Render/Cloud: paste the minified JSON content into `FIREBASE_CREDENTIALS_JSON` in your host's secret environment variables.
+1. **Create a Cloudflare Zero Trust team:** Open the [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/) and note your team domain (e.g., `https://myteam.cloudflareaccess.com`).
+2. **Configure Identity Providers:**
+   - Go to **Settings → Authentication → Login methods**.
+   - Enable **One-time PIN** (Email OTP) and/or **Google**, **GitHub**, or **Okta**.
+3. **Create an Access Application:**
+   - Go to **Access → Applications → Add an application → Self-hosted**.
+   - Set the application domain to your AgentLens domain (e.g., `agentlens.yourdomain.com`) and attach an Allow policy for your users.
+   - Copy the **Application Audience (AUD) Tag** from the application's **Overview** tab.
+4. **Configure Backend Environment:**
+   - Set `CLOUDFLARE_TEAM_DOMAIN=https://<your-team>.cloudflareaccess.com`
+   - Set `CLOUDFLARE_ACCESS_AUD=<your-application-aud-tag>`
+   - Set `APP_ENV=production` (or `ALLOW_LOCAL_DEV_AUTH=false`) so requests without a valid `Cf-Access-Jwt-Assertion` or `CF_Authorization` JWT are rejected with `401`.
 
 ---
 
@@ -420,9 +417,11 @@ Add `--mock` to force offline simulation.
 ### Backend (`.env`) — Private Server Configuration
 | Variable | Default | Required | Description |
 |---|---|---|---|
-| `FIREBASE_PROJECT_ID` | — | Yes (for Auth) | Firebase project ID used by `firebase-admin` to verify ID tokens. |
-| `FIREBASE_CREDENTIALS_PATH` | — | Optional | Local filesystem path to a Firebase service account JSON file. |
-| `FIREBASE_CREDENTIALS_JSON` | — | Optional | Raw JSON string of the Firebase service account (recommended on Render). |
+| `CLOUDFLARE_TEAM_DOMAIN` | — | Prod: Yes | Cloudflare Zero Trust team domain (e.g. `https://myteam.cloudflareaccess.com`). |
+| `CLOUDFLARE_ACCESS_AUD` | — | Prod: Yes | Cloudflare Access Application Audience (AUD) tag. |
+| `ALLOW_LOCAL_DEV_AUTH` | `true` in dev, `false` in prod | No | Uses a local dev identity when Cloudflare Access env vars are unset. |
+| `LOCAL_DEV_USER_ID` | `local-dev-user` | No | Default `uid` when `ALLOW_LOCAL_DEV_AUTH=true`. |
+| `LOCAL_DEV_USER_EMAIL` | `developer@localhost` | No | Default email when `ALLOW_LOCAL_DEV_AUTH=true`. |
 | `GEMINI_API_KEY` | — | Optional | Google AI Studio API key. Empty = deterministic `offline_simulation`. |
 | `TAVILY_API_KEY` | — | Optional | Tavily web search key. Empty = DuckDuckGo fallback. |
 | `DEFAULT_MODEL` | `gemini-2.5-flash` | No | Default Gemini model when an agent omits one. |
@@ -452,18 +451,13 @@ All `VITE_*` variables are bundled into the browser build and are **public** by 
 | Variable | Default | Required | Description |
 |---|---|---|---|
 | `VITE_API_URL` | `""` (empty) | Prod: Yes | Backend base URL (e.g., `https://agentlens-backend.onrender.com`). Leave empty locally to use Vite's proxy. |
-| `VITE_FIREBASE_API_KEY` | — | Yes | Public Firebase Web API key. |
-| `VITE_FIREBASE_AUTH_DOMAIN` | — | Yes | Firebase Auth domain (`<project>.firebaseapp.com`). |
-| `VITE_FIREBASE_PROJECT_ID` | — | Yes | Firebase project ID. |
-| `VITE_FIREBASE_STORAGE_BUCKET` | — | Optional | Firebase storage bucket. |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | — | Optional | Firebase messaging sender ID. |
-| `VITE_FIREBASE_APP_ID` | — | Yes | Firebase web app ID. |
+| `VITE_CLOUDFLARE_LOGOUT_URL` | `/cdn-cgi/access/logout` | Optional | Cloudflare Access logout endpoint if frontend and backend are on different domains. |
 
 ---
 
 ## 13. Usage Guide
 
-1. **Register or Sign In:** Click **Sign in** in the navbar (or navigate to any workspace page) to register with Email/Password or continue with Google.
+1. **Authenticate:** In production, Cloudflare Access authenticates you at the edge before loading the workspace; locally (`ALLOW_LOCAL_DEV_AUTH=true`), AgentLens signs you in as `local-dev-user`.
 2. **Explore Recorded Demo Runs:** On **My Runs** (`DashboardPage`), two pre-seeded `recorded_demo` runs are available immediately to inspect the graph, timeline, and evaluations.
 3. **Create & Configure Custom Agents:** Open **Build an Agent** (`CustomAgentBuilderPage`) to define a custom agent's name, role, instructions, model, temperature, allowed tools, JSON output schema, and execution limits. Use **Meet the Agents** (`AgentsPage`) to toggle, duplicate, test in isolation, or view per-agent execution history.
 4. **Start a Run:** Click **Ask AgentLens** (`NewRunModal`), enter a goal, adjust guardrail budgets or fault injection settings if desired, and launch.
@@ -475,14 +469,14 @@ All `VITE_*` variables are bundled into the browser build and are **public** by 
 
 ## 14. API Documentation
 
-All protected endpoints require a valid Firebase ID token via `Authorization: Bearer <FIREBASE_ID_TOKEN>`. Because browser `EventSource` does not support custom headers, `GET /runs/{run_id}/events` also accepts `?token=<FIREBASE_ID_TOKEN>`.
+All protected endpoints verify the Cloudflare Access JWT via `Cf-Access-Jwt-Assertion`, the `CF_Authorization` cookie (sent automatically by browsers with `credentials: "include"`), `Authorization: Bearer <JWT>`, or `?token=<JWT>`.
 
 | Method | Endpoint | Auth | Purpose | Key Parameters |
 |---|---|---|---|---|
 | `GET` | `/health` | Public | Liveness & LLM mode status | — |
 | `GET` | `/config` | Public | Non-secret config, auth status, limits, pricing | — |
 | `GET` | `/concepts` | Public | Educational AI concepts list | — |
-| `GET` | `/auth/me` | Bearer | Returns verified Firebase user (`uid`, `email`, `name`, `picture`) | — |
+| `GET` | `/auth/me` | Cloudflare JWT / Dev | Returns verified user (`uid`, `email`, `name`, `auth_provider`) | — |
 | `POST` | `/runs` | Bearer | Create & start a run (rate-limited) | JSON: `goal`, optional `config`, `fault_injection` |
 | `GET` | `/runs` | Bearer | List authenticated user's runs + public demo runs | Query: `limit` (1–500) |
 | `GET` | `/runs/{run_id}` | Bearer | Get run details & totals (owner or public demo only) | Path: `run_id` |
@@ -503,8 +497,8 @@ All protected endpoints require a valid Firebase ID token via `Authorization: Be
 
 ### Example Authenticated Request
 ```bash
-curl -X POST http://127.0.0.1:8000/runs \
-  -H "Authorization: Bearer <FIREBASE_ID_TOKEN>" \
+curl -X POST https://your-domain.com/runs \
+  -H "Cf-Access-Jwt-Assertion: <CLOUDFLARE_ACCESS_JWT>" \
   -H "Content-Type: application/json" \
   -d '{"goal": "Compare quicksort and mergesort on 5,000 integers"}'
 ```
@@ -538,29 +532,28 @@ npm run build
 `render.yaml` configures a Python `3.12.6` web service with `/health` check and a 1 GB persistent disk at `/var/data` (`DB_PATH=/var/data/agentlens.db`):
 1. Connect the repository in Render using `render.yaml`.
 2. Set secret environment variables in the Render dashboard:
-   - `FIREBASE_PROJECT_ID`
-   - `FIREBASE_CREDENTIALS_JSON` (raw service account JSON)
+   - `CLOUDFLARE_TEAM_DOMAIN` (e.g. `https://myteam.cloudflareaccess.com`)
+   - `CLOUDFLARE_ACCESS_AUD` (Application Audience tag)
    - `GEMINI_API_KEY` (and optionally `TAVILY_API_KEY`)
-   - `CORS_ORIGINS` set to your exact Vercel origin (e.g., `https://your-agentlens.vercel.app`) — never leave `*` in production.
+   - `CORS_ORIGINS` set to your exact frontend origin (e.g., `https://agentlens.yourdomain.com`) — never leave `*` in production.
 3. Keep `DB_PATH` on the persistent disk (`/var/data/agentlens.db`); without persistent storage, deploys and restarts erase SQLite runs and custom agents.
 
 ### Frontend on Vercel
 `frontend/vercel.json` builds with `npm run build`, outputs `dist`, and rewrites SPA routes to `/index.html`:
 1. Import the project in Vercel with **Root Directory** set to `frontend`.
-2. Set `VITE_API_URL=https://<your-render-service>.onrender.com` and all `VITE_FIREBASE_*` variables in Vercel Environment Variables.
-3. Add your Vercel deployment domain to **Firebase Console → Authentication → Settings → Authorized domains**.
-4. Redeploy after changing any `VITE_*` variable so Vite bakes it into the bundle.
+2. Set `VITE_API_URL=https://<your-render-service>.onrender.com` in Vercel Environment Variables and place your domain behind Cloudflare Access.
+3. Redeploy after changing any `VITE_*` variable so Vite bakes it into the bundle.
 
 ---
 
 ## 17. Security
 
-- **Firebase ID Token Verification:** Every protected REST and SSE route verifies the user's Firebase JWT via `firebase-admin` (`backend/app/auth.py`). Unauthenticated, malformed, revoked, or expired tokens are rejected with `401`.
+- **Cloudflare Access JWT Verification:** Every protected REST and SSE route verifies the Cloudflare Access RS256 JWT (`Cf-Access-Jwt-Assertion`, `CF_Authorization`, `Authorization: Bearer`, or `?token=`) against Cloudflare's JWKS endpoint (`backend/app/auth.py`). Unauthenticated, invalid, wrong-audience, or expired tokens are rejected with `401`.
 - **User-Level Resource Isolation:** `runs` and custom `agents` store `user_id`. Queries filter by `user_id = current_user.uid` (plus read-only `is_public = 1` golden demo runs and `user_id = 'system'` read-only built-in/template agents), returning `404` for another user's private resources and `403` when attempting to mutate shared system templates.
 - **Tool Permissions:** `tool_permitted()` enforces `allowed_tools` server-side on every tool call.
 - **Execution Guardrails:** `GuardrailManager` enforces `max_steps`, `max_tokens`, and `max_seconds` in code.
 - **Python Sandbox Restrictions:** `backend/app/tools/sandbox.py` combines static pattern rejection, a throwaway working directory with a stripped environment, an in-child CPython `sys.addaudithook` blocking subprocess creation, sockets/network, and out-of-sandbox writes, POSIX `rlimits` (where supported), and a hard wall-clock timeout. *(Note: this is process isolation, not a VM/container boundary—use gVisor/Firecracker/Piston for untrusted multi-tenant code execution.)*
-- **API Key Handling:** `GEMINI_API_KEY`, `TAVILY_API_KEY`, and `FIREBASE_CREDENTIALS_JSON` remain strictly on the backend and are never exposed by `/config`, traces, logs, or the frontend bundle.
+- **API Key Handling:** `GEMINI_API_KEY` and `TAVILY_API_KEY` remain strictly on the backend and are never exposed by `/config`, traces, logs, or the frontend bundle.
 
 ---
 
@@ -587,7 +580,7 @@ Contributions are welcome:
    python -m pytest backend/tests -q
    cd frontend && npm run build
    ```
-4. Never commit `.env` files, SQLite databases, or Firebase service account JSON keys.
+4. Never commit `.env` files or SQLite databases.
 
 ---
 

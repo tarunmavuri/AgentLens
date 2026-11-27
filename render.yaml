@@ -14,9 +14,9 @@ services:
         sync: false
       - key: TAVILY_API_KEY
         sync: false
-      - key: FIREBASE_PROJECT_ID
+      - key: CLOUDFLARE_TEAM_DOMAIN
         sync: false
-      - key: FIREBASE_CREDENTIALS_JSON
+      - key: CLOUDFLARE_ACCESS_AUD
         sync: false
       - key: DEFAULT_MODEL
         value: gemini-2.5-flash

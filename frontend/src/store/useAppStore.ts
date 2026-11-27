@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { AgentDefinition, ConceptItem, Event, FaultConfig, RunSummary } from '../types';
 import * as api from '../api/client';
-import { useAuthStore } from './useAuthStore';
 
 export type ViewType =
   | 'landing'
@@ -42,7 +41,7 @@ interface AppState {
 
   eventSource: EventSource | null;
   streamError: string | null;
-  startLiveRunStream: (runId: string) => Promise<void>;
+  startLiveRunStream: (runId: string) => void;
   stopLiveRunStream: () => void;
   clearUserData: () => void;
 
@@ -149,15 +148,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   eventSource: null,
   streamError: null,
-  startLiveRunStream: async (runId) => {
+  startLiveRunStream: (runId) => {
     get().stopLiveRunStream();
-    const token = await useAuthStore.getState().getIdToken();
-    if (!token) {
-      set({ streamError: 'Sign in required to stream live events.' });
-      return;
-    }
 
-    const source = new EventSource(api.streamUrl(runId, token));
+    const source = new EventSource(api.streamUrl(runId), { withCredentials: true });
 
     source.onmessage = (message) => {
       let event: Event;

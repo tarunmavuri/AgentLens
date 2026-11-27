@@ -1,15 +1,24 @@
-"""Authentication enforcement and per-user data isolation tests."""
+"""Cloudflare Access authentication enforcement and per-user data isolation tests."""
 
 from __future__ import annotations
 
+import time
+from types import SimpleNamespace
 from unittest.mock import patch
 
+import jwt
 import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
-from firebase_admin import auth as firebase_auth
 
 from backend.app.auth import AuthenticatedUser, get_current_user
+from backend.app.config import settings
 from backend.app.main import app
+
+
+def _make_rsa_keypair():
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    return private_key, private_key.public_key()
 
 
 @pytest.fixture()
@@ -19,55 +28,114 @@ def raw_client():
         yield test_client
 
 
-def test_protected_routes_require_authentication(raw_client):
-    assert raw_client.get("/runs").status_code == 401
-    assert raw_client.post("/runs", json={"goal": "Unauthenticated run"}).status_code == 401
-    assert raw_client.get("/agents").status_code == 401
-    assert raw_client.post("/agents", json={"name": "x"}).status_code == 401
-    assert raw_client.get("/tools").status_code == 401
-    assert raw_client.get("/auth/me").status_code == 401
+def test_cloudflare_access_rejects_unauthenticated_and_invalid_tokens(raw_client, monkeypatch):
+    private_key, public_key = _make_rsa_keypair()
+    team_domain = "https://agentlens-test.cloudflareaccess.com"
+    audience = "test-aud-tag-123"
 
-    # Public routes remain accessible
-    assert raw_client.get("/health").status_code == 200
-    assert raw_client.get("/config").status_code == 200
-    assert raw_client.get("/concepts").status_code == 200
+    monkeypatch.setattr(settings, "cloudflare_team_domain", team_domain)
+    monkeypatch.setattr(settings, "cloudflare_access_aud", audience)
+    monkeypatch.setattr(settings, "allow_local_dev_auth", False)
 
-
-def test_invalid_and_expired_tokens_rejected(raw_client):
-    assert (
-        raw_client.get("/runs", headers={"Authorization": "Basic abc"}).status_code
-        == 401
+    fake_jwk_client = SimpleNamespace(
+        get_signing_key_from_jwt=lambda _token: SimpleNamespace(key=public_key)
     )
 
-    with patch("backend.app.auth._ensure_firebase_app", return_value=object()), patch(
-        "backend.app.auth.firebase_auth.verify_id_token",
-        side_effect=firebase_auth.InvalidIdTokenError("bad token"),
-    ):
-        res = raw_client.get("/auth/me", headers={"Authorization": "Bearer bad-token"})
-        assert res.status_code == 401
+    with patch("backend.app.auth._get_jwk_client", return_value=fake_jwk_client):
+        # Missing token -> 401 on protected routes
+        assert raw_client.get("/runs").status_code == 401
+        assert raw_client.post("/runs", json={"goal": "Unauthenticated run"}).status_code == 401
+        assert raw_client.get("/agents").status_code == 401
+        assert raw_client.get("/tools").status_code == 401
+        assert raw_client.get("/auth/me").status_code == 401
 
-    with patch("backend.app.auth._ensure_firebase_app", return_value=object()), patch(
-        "backend.app.auth.firebase_auth.verify_id_token",
-        side_effect=firebase_auth.ExpiredIdTokenError("expired", None),
-    ):
-        res = raw_client.get("/auth/me", headers={"Authorization": "Bearer expired-token"})
-        assert res.status_code == 401
+        # Public routes remain accessible
+        assert raw_client.get("/health").status_code == 200
+        assert raw_client.get("/config").status_code == 200
+        assert raw_client.get("/concepts").status_code == 200
 
+        # Invalid token -> 401
+        assert (
+            raw_client.get(
+                "/auth/me", headers={"Cf-Access-Jwt-Assertion": "not.a.jwt"}
+            ).status_code
+            == 401
+        )
 
-def test_bearer_and_query_token_verification(raw_client):
-    with patch("backend.app.auth._ensure_firebase_app", return_value=object()), patch(
-        "backend.app.auth.firebase_auth.verify_id_token",
-        return_value={"uid": "firebase-uid-123", "email": "alice@example.com", "name": "Alice"},
-    ):
-        res = raw_client.get("/auth/me", headers={"Authorization": "Bearer valid-jwt"})
+        # Expired token -> 401
+        expired_jwt = jwt.encode(
+            {
+                "sub": "cf-user-1",
+                "email": "alice@example.com",
+                "aud": audience,
+                "iss": team_domain,
+                "exp": int(time.time()) - 60,
+            },
+            private_key,
+            algorithm="RS256",
+        )
+        assert (
+            raw_client.get(
+                "/auth/me", headers={"Cf-Access-Jwt-Assertion": expired_jwt}
+            ).status_code
+            == 401
+        )
+
+        # Wrong audience -> 401
+        wrong_aud_jwt = jwt.encode(
+            {
+                "sub": "cf-user-1",
+                "email": "alice@example.com",
+                "aud": "wrong-aud",
+                "iss": team_domain,
+                "exp": int(time.time()) + 300,
+            },
+            private_key,
+            algorithm="RS256",
+        )
+        assert (
+            raw_client.get(
+                "/auth/me", headers={"Cf-Access-Jwt-Assertion": wrong_aud_jwt}
+            ).status_code
+            == 401
+        )
+
+        # Valid Cloudflare Access JWT via Cf-Access-Jwt-Assertion header or CF_Authorization cookie
+        valid_jwt = jwt.encode(
+            {
+                "sub": "cf-uid-123",
+                "email": "alice@example.com",
+                "name": "Alice",
+                "aud": audience,
+                "iss": team_domain,
+                "exp": int(time.time()) + 300,
+            },
+            private_key,
+            algorithm="RS256",
+        )
+        res = raw_client.get("/auth/me", headers={"Cf-Access-Jwt-Assertion": valid_jwt})
         assert res.status_code == 200
-        assert res.json()["uid"] == "firebase-uid-123"
+        assert res.json()["uid"] == "cf-uid-123"
         assert res.json()["email"] == "alice@example.com"
+        assert res.json()["auth_provider"] == "cloudflare_access"
 
-        # Query token is supported for SSE EventSource connections
-        res_query = raw_client.get("/auth/me?token=valid-jwt")
-        assert res_query.status_code == 200
-        assert res_query.json()["uid"] == "firebase-uid-123"
+        res_cookie = raw_client.get("/auth/me", cookies={"CF_Authorization": valid_jwt})
+        assert res_cookie.status_code == 200
+        assert res_cookie.json()["uid"] == "cf-uid-123"
+
+
+def test_local_dev_auth_fallback_and_production_guard(raw_client, monkeypatch):
+    monkeypatch.setattr(settings, "cloudflare_team_domain", "")
+    monkeypatch.setattr(settings, "cloudflare_access_aud", "")
+
+    monkeypatch.setattr(settings, "allow_local_dev_auth", True)
+    dev_res = raw_client.get("/auth/me")
+    assert dev_res.status_code == 200
+    assert dev_res.json()["auth_provider"] == "local_dev"
+
+    monkeypatch.setattr(settings, "allow_local_dev_auth", False)
+    prod_res = raw_client.get("/auth/me")
+    assert prod_res.status_code == 503
 
 
 def test_user_data_isolation_for_runs_and_custom_agents():
