@@ -1,130 +1,187 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
-import { AgentDefinition } from '../../types';
-import { Bot, Clock, Wrench, Shield, Sparkles, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { AgentDefinition, TaskDefinition } from '../../types';
+import { Bot, X, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface AgentInspectorProps {
   agent: AgentDefinition | null;
-  onClose: () => void;
+  assignedTask?: TaskDefinition | null;
+  onClose?: () => void;
 }
 
-export const AgentInspector: React.FC<AgentInspectorProps> = ({ agent, onClose }) => {
+export const AgentInspector: React.FC<AgentInspectorProps> = ({
+  agent,
+  assignedTask,
+  onClose,
+}) => {
   const { events } = useAppStore();
+  const [showInstructions, setShowInstructions] = useState(false);
 
   if (!agent) {
     return (
-      <div className="p-6 text-center dark:text-charcoal-muted text-cream-muted text-xs space-y-2">
-        <Bot className="w-8 h-8 mx-auto opacity-30" />
-        <p>Click any agent box to see what it does, what tools it may use, and how much work it has done in this run.</p>
+      <div className="h-full flex flex-col items-center justify-center p-6 text-center text-cream-muted dark:text-charcoal-muted text-xs space-y-2">
+        <div className="w-10 h-10 rounded-full bg-coral/10 text-coral flex items-center justify-center">
+          <Bot className="w-5 h-5" />
+        </div>
+        <p className="font-semibold text-cream-text dark:text-charcoal-text">
+          Click an agent node
+        </p>
+        <p className="leading-relaxed max-w-[230px]">
+          Select any agent on the live graph to inspect its assigned task, permitted tools, and live
+          activity.
+        </p>
       </div>
     );
   }
 
-  // Filter events related to this agent
-  const agentEvents = events.filter(e => e.agent_id === agent.agent_id);
-  const toolCalls = agentEvents.filter(e => e.type === 'tool_call');
-  const thoughts = agentEvents.filter(e => e.type === 'thought');
-  const latestCritique = events.find(e => e.type === 'critique');
+  const agentEvents = events.filter((e) => e.agent_id === agent.agent_id);
+  const toolCalls = agentEvents.filter((e) => e.type === 'tool_call');
+  const thoughts = agentEvents.filter((e) => e.type === 'thought');
+  const latestThought = thoughts[thoughts.length - 1];
+  const agentCritiques = events.filter(
+    (e) => e.type === 'critique' && assignedTask && e.task_id === assignedTask.id,
+  );
+  const latestCritique = agentCritiques[agentCritiques.length - 1];
 
   return (
-    <div className="h-full flex flex-col justify-between overflow-y-auto p-5 space-y-6">
-      
-      {/* Top Header */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b dark:border-charcoal-border border-cream-border">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-coral/10 text-coral flex items-center justify-center font-bold">
-              <Bot className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="font-bold text-sm">{agent.name}</h3>
-              <p className="text-[10px] uppercase font-bold tracking-wider text-coral">{agent.role}</p>
-            </div>
+    <div className="h-full flex flex-col overflow-y-auto p-5 divide-y divide-cream-border dark:divide-charcoal-border">
+      {/* Header */}
+      <div className="pb-4 flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-coral/15 text-coral flex items-center justify-center flex-shrink-0">
+            <Bot className="w-4 h-4" />
           </div>
-          <button 
-            onClick={onClose}
-            className="p-1 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
-          >
-            <X className="w-4 h-4 text-neutral-400" />
-          </button>
+          <div className="min-w-0">
+            <h3 className="font-bold text-sm truncate">{agent.name}</h3>
+            <p className="text-[11px] font-medium text-coral truncate">{agent.role}</p>
+          </div>
         </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Clear selected agent"
+            className="p-1 rounded-full text-cream-muted hover:text-cream-text hover:bg-cream-subtle dark:hover:bg-charcoal-subtle transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
 
-        {/* Description */}
-        <div className="space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">
-            What this agent does
+      {/* Assigned Task */}
+      {assignedTask && (
+        <div className="py-3.5 space-y-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-coral">
+            Assigned Task · {assignedTask.id}
           </span>
-          <p className="text-xs dark:text-charcoal-text text-cream-text leading-relaxed">
-            {agent.description}
+          <p className="text-xs font-semibold">{assignedTask.title}</p>
+          <p className="text-[11px] text-cream-muted dark:text-charcoal-muted leading-relaxed">
+            {assignedTask.success_criteria}
           </p>
         </div>
+      )}
 
-        {/* Model & Config */}
-        <div className="p-3 rounded-xl border dark:border-charcoal-border border-cream-border dark:bg-charcoal-bg bg-cream-bg space-y-2 text-xs">
-          <div className="flex justify-between">
-            <span className="dark:text-charcoal-muted text-cream-muted">AI model:</span>
-            <span className="font-mono font-bold">{agent.llm_config?.model || 'gemini-2.5-flash'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="dark:text-charcoal-muted text-cream-muted">Temperature:</span>
-            <span className="font-mono">{agent.llm_config?.temperature ?? 0.2}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="dark:text-charcoal-muted text-cream-muted">Max Steps:</span>
-            <span className="font-mono">{agent.execution_limits?.max_steps ?? 5}</span>
-          </div>
-        </div>
-
-        {/* Allowed Tools */}
-        <div className="space-y-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">
-            Tools it is allowed to use
-          </span>
-          <div className="flex flex-wrap gap-1.5">
-            {agent.allowed_tools && agent.allowed_tools.length > 0 ? (
-              agent.allowed_tools.map((t) => (
-                <span
-                  key={t}
-                  className="px-2.5 py-1 rounded-lg text-[10px] font-mono font-semibold border dark:border-charcoal-border border-cream-border dark:bg-charcoal-bg bg-cream-bg"
-                >
-                  {t}
-                </span>
-              ))
-            ) : (
-              <span className="text-xs italic text-neutral-400">It only thinks — no external tools.</span>
-            )}
-          </div>
-        </div>
-
-        {/* Live Metrics for this Agent */}
-        <div className="space-y-2 pt-2 border-t dark:border-charcoal-border border-cream-border">
-          <span className="text-[10px] font-bold uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">
-            What it has done in this run
-          </span>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="p-2.5 rounded-lg border dark:border-charcoal-border border-cream-border dark:bg-charcoal-bg bg-cream-bg">
-              <span className="text-[10px] dark:text-charcoal-muted text-cream-muted block">Thinking steps</span>
-              <span className="font-bold text-sm">{thoughts.length}</span>
-            </div>
-            <div className="p-2.5 rounded-lg border dark:border-charcoal-border border-cream-border dark:bg-charcoal-bg bg-cream-bg">
-              <span className="text-[10px] dark:text-charcoal-muted text-cream-muted block">Tool uses</span>
-              <span className="font-bold text-sm">{toolCalls.length}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* System Instructions Preview */}
-      <div className="space-y-1 pt-4 border-t dark:border-charcoal-border border-cream-border">
-        <span className="text-[10px] font-bold uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">
-          Its instructions (how it is told to behave)
+      {/* Role Summary */}
+      <div className="py-3.5 space-y-1">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-cream-muted dark:text-charcoal-muted">
+          Responsibility
         </span>
-        <div className="p-2.5 rounded-lg dark:bg-charcoal-bg bg-cream-bg font-mono text-[10px] max-h-32 overflow-y-auto leading-relaxed">
-          {agent.instructions}
+        <p className="text-xs leading-relaxed">{agent.description}</p>
+      </div>
+
+      {/* Inline Stat Bar (No boxes) */}
+      <div className="py-3.5 space-y-2.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-cream-muted dark:text-charcoal-muted block">
+          Run Activity
+        </span>
+        <div className="grid grid-cols-3 divide-x divide-cream-border dark:divide-charcoal-border text-xs">
+          <div className="pr-3">
+            <span className="text-[10px] text-cream-muted dark:text-charcoal-muted block">
+              Thoughts
+            </span>
+            <span className="font-bold text-sm">{thoughts.length}</span>
+          </div>
+          <div className="px-3">
+            <span className="text-[10px] text-cream-muted dark:text-charcoal-muted block">
+              Tool Uses
+            </span>
+            <span className="font-bold text-sm">{toolCalls.length}</span>
+          </div>
+          <div className="pl-3">
+            <span className="text-[10px] text-cream-muted dark:text-charcoal-muted block">
+              Critic
+            </span>
+            <span className="font-bold text-sm text-coral">
+              {latestCritique?.payload?.score != null ? `${latestCritique.payload.score}/10` : '—'}
+            </span>
+          </div>
+        </div>
+        {latestThought?.payload?.thought && (
+          <p className="text-[11px] italic text-cream-muted dark:text-charcoal-muted pl-3 border-l-2 border-coral/40">
+            “{latestThought.payload.thought}”
+          </p>
+        )}
+      </div>
+
+      {/* Permitted Tools */}
+      <div className="py-3.5 space-y-2">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-cream-muted dark:text-charcoal-muted block">
+          Permitted Tools
+        </span>
+        <div className="flex flex-wrap gap-1.5">
+          {agent.allowed_tools && agent.allowed_tools.length > 0 ? (
+            agent.allowed_tools.map((tool) => (
+              <span
+                key={tool}
+                className="px-2.5 py-0.5 rounded-full text-[11px] font-mono border border-cream-border dark:border-charcoal-border bg-cream-bg dark:bg-charcoal-bg"
+              >
+                {tool}
+              </span>
+            ))
+          ) : (
+            <span className="text-xs text-cream-muted dark:text-charcoal-muted italic">
+              None (reasoning only)
+            </span>
+          )}
         </div>
       </div>
 
+      {/* Runtime Spec */}
+      <div className="py-3.5 space-y-1.5 text-xs">
+        <div className="flex justify-between">
+          <span className="text-cream-muted dark:text-charcoal-muted">Model</span>
+          <span className="font-mono font-medium">{agent.llm_config?.model || 'gemini-2.5-flash'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-cream-muted dark:text-charcoal-muted">Temperature</span>
+          <span className="font-mono">{agent.llm_config?.temperature ?? 0.2}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-cream-muted dark:text-charcoal-muted">Max steps</span>
+          <span className="font-mono">{agent.execution_limits?.max_steps ?? 5}</span>
+        </div>
+      </div>
+
+      {/* Collapsible Instructions */}
+      <div className="pt-3.5">
+        <button
+          type="button"
+          onClick={() => setShowInstructions((v) => !v)}
+          className="w-full flex items-center justify-between text-[11px] font-semibold text-cream-muted dark:text-charcoal-muted hover:text-coral transition-colors"
+        >
+          <span>System Instructions</span>
+          {showInstructions ? (
+            <ChevronDown className="w-3.5 h-3.5" />
+          ) : (
+            <ChevronRight className="w-3.5 h-3.5" />
+          )}
+        </button>
+        {showInstructions && (
+          <div className="mt-2 font-mono text-[11px] text-cream-muted dark:text-charcoal-muted max-h-36 overflow-y-auto leading-relaxed">
+            {agent.instructions}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
-

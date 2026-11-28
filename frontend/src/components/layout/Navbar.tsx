@@ -1,14 +1,21 @@
 import React from 'react';
 import { useAppStore, ViewType } from '../../store/useAppStore';
 import { useAuthStore } from '../../store/useAuthStore';
-import { Moon, Sun, Layers, Plus, BookOpen, LogOut, LogIn } from 'lucide-react';
+import { AgentLensLogo } from '../brand/AgentLensLogo';
+import { Moon, Sun, Plus, BookOpen, LogOut, LogIn, Menu } from 'lucide-react';
 
 interface NavbarProps {
   onOpenNewRun: () => void;
+  onOpenMobileMenu?: () => void;
+  showMobileMenuButton?: boolean;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onOpenNewRun }) => {
-  const { theme, toggleTheme, currentView, setView, clearUserData } = useAppStore();
+export const Navbar: React.FC<NavbarProps> = ({
+  onOpenNewRun,
+  onOpenMobileMenu,
+  showMobileMenuButton = false,
+}) => {
+  const { theme, toggleTheme, currentView, setView, setSettingsTab, clearUserData } = useAppStore();
   const { user, signOut } = useAuthStore();
 
   const userLabel = user?.name || user?.email?.split('@')[0] || user?.uid || 'Account';
@@ -21,53 +28,56 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenNewRun }) => {
   };
 
   const links: { label: string; view: ViewType; matches: ViewType[] }[] = [
-    { label: 'Home', view: 'landing', matches: ['landing'] },
-    { label: 'How it works', view: 'learn', matches: ['learn'] },
-    { label: 'My Runs', view: 'dashboard', matches: ['dashboard'] },
-    { label: 'Watch Live', view: 'workspace', matches: ['workspace'] },
+    { label: 'Overview', view: 'dashboard', matches: ['dashboard'] },
+    { label: 'Live Runs', view: 'workspace', matches: ['workspace'] },
     { label: 'Agents', view: 'agents', matches: ['agents', 'builder'] },
+    { label: 'Templates', view: 'templates', matches: ['templates'] },
+    { label: 'Concepts', view: 'learn', matches: ['learn'] },
   ];
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b backdrop-blur-md transition-colors duration-200
-      dark:bg-charcoal-bg/90 dark:border-charcoal-border dark:text-charcoal-text
-      bg-cream-bg/90 border-cream-border text-cream-text">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <header
+      className="sticky top-0 z-40 w-full border-b transition-colors duration-200
+        bg-cream-bg/92 border-cream-border text-cream-text backdrop-blur-md
+        dark:bg-charcoal-bg/92 dark:border-charcoal-border dark:text-charcoal-text"
+    >
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          {showMobileMenuButton && onOpenMobileMenu && (
+            <button
+              type="button"
+              onClick={onOpenMobileMenu}
+              aria-label="Open navigation menu"
+              className="md:hidden h-9 w-9 rounded-full border flex items-center justify-center transition-colors
+                border-cream-border bg-cream-surface hover:bg-cream-subtle
+                dark:border-charcoal-border dark:bg-charcoal-surface dark:hover:bg-charcoal-subtle"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+          )}
 
-        {/* Brand */}
-        <div
-          onClick={() => setView('landing')}
-          className="flex items-center space-x-3 cursor-pointer group"
-        >
-          <div className="w-9 h-9 rounded-xl bg-coral flex items-center justify-center text-white shadow-md shadow-coral/20 group-hover:scale-105 transition-transform">
-            <Layers className="w-5 h-5 stroke-[2.2]" />
-          </div>
-          <div>
-            <div className="flex items-center space-x-1.5">
-              <span className="font-bold text-lg tracking-tight">AgentLens</span>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full
-                dark:bg-coral/10 dark:text-coral bg-coral/10 text-coral border border-coral/30">
-                v1.0
-              </span>
-            </div>
-            <p className="text-[11px] tracking-wide font-medium dark:text-charcoal-muted text-cream-muted hidden sm:block">
-              Watch AI agents work, step by step
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={() => setView('landing')}
+            className="text-left focus:outline-none rounded-lg"
+          >
+            <AgentLensLogo size={34} subtitle="Watch AI agents think in the open" />
+          </button>
         </div>
 
-        {/* Centre links — deliberately short so the first visit is not overwhelming */}
-        <nav className="hidden md:flex items-center space-x-1">
+        {/* Clean underline nav links */}
+        <nav className="hidden lg:flex items-center space-x-1" aria-label="Primary navigation">
           {links.map((link) => {
             const active = link.matches.includes(currentView);
             return (
               <button
                 key={link.label}
+                type="button"
                 onClick={() => setView(link.view)}
-                className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
                   active
-                    ? 'dark:bg-charcoal-surface dark:text-coral bg-cream-surface text-coral shadow-sm'
-                    : 'dark:text-charcoal-muted hover:dark:text-charcoal-text text-cream-muted hover:text-cream-text'
+                    ? 'text-coral bg-coral/10'
+                    : 'text-cream-muted dark:text-charcoal-muted hover:text-cream-text dark:hover:text-charcoal-text'
                 }`}
               >
                 {link.label}
@@ -76,72 +86,61 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenNewRun }) => {
           })}
         </nav>
 
-        {/* Mobile navigation */}
-        <select
-          aria-label="Navigate"
-          value={currentView}
-          onChange={(event) => setView(event.target.value as ViewType)}
-          className="md:hidden ml-auto mr-2 px-2 py-1.5 rounded-lg border text-[11px] font-semibold dark:bg-charcoal-surface dark:border-charcoal-border dark:text-charcoal-text bg-cream-surface border-cream-border text-cream-text max-w-[9rem]"
-        >
-          <option value="landing">Home</option>
-          <option value="learn">How it works</option>
-          <option value="dashboard">My Runs</option>
-          <option value="workspace">Watch Live</option>
-          <option value="agents">Meet the Agents</option>
-          <option value="builder">Build an Agent</option>
-          <option value="evals">Scores</option>
-          <option value="history">Replay a Run</option>
-          <option value="settings">Settings</option>
-        </select>
-
         {/* Right controls */}
-        <div className="flex items-center space-x-3">
-
+        <div className="flex items-center gap-2.5">
           <button
+            type="button"
             onClick={toggleTheme}
             aria-label="Toggle light or dark theme"
-            className="w-10 h-10 rounded-full flex items-center justify-center transition-all
-              dark:bg-charcoal-surface dark:hover:bg-charcoal-border dark:text-amberAccent
-              bg-cream-surface hover:bg-cream-border text-coral border dark:border-charcoal-border border-cream-border shadow-sm"
+            title={theme === 'dark' ? 'Switch to warm cream theme' : 'Switch to charcoal dark theme'}
+            className="w-9 h-9 rounded-full flex items-center justify-center border transition-colors
+              bg-cream-surface border-cream-border text-coral hover:bg-cream-subtle
+              dark:bg-charcoal-surface dark:border-charcoal-border dark:text-amberAccent dark:hover:bg-charcoal-subtle"
           >
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
 
           {user ? (
-            <div className="flex items-center space-x-2">
-              <div
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsTab('account');
+                  setView('settings');
+                }}
                 title={user.email || userLabel}
-                className="hidden lg:flex items-center space-x-2 px-2.5 py-1 rounded-full border dark:border-charcoal-border border-cream-border dark:bg-charcoal-surface bg-cream-surface"
+                className="hidden sm:flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full border transition-colors
+                  bg-cream-surface border-cream-border hover:bg-cream-subtle
+                  dark:bg-charcoal-surface dark:border-charcoal-border dark:hover:bg-charcoal-subtle"
               >
-                <div className="w-6 h-6 rounded-full bg-coral/20 text-coral flex items-center justify-center text-xs font-bold">
+                <div className="w-6 h-6 rounded-full bg-coral/15 text-coral flex items-center justify-center text-[11px] font-bold">
                   {userInitial}
                 </div>
-                <span className="text-xs font-semibold max-w-[8rem] truncate">{userLabel}</span>
-              </div>
-              {user.auth_provider === 'cloudflare_access' ? (
+                <span className="text-xs font-semibold max-w-[7.5rem] truncate">{userLabel}</span>
+              </button>
+
+              {user.auth_provider === 'cloudflare_access' && (
                 <button
+                  type="button"
                   onClick={handleSignOut}
                   title="Sign out of Cloudflare Access"
                   aria-label="Sign out"
-                  className="px-3 py-2 rounded-full border text-xs font-semibold flex items-center space-x-1.5 transition-all
-                    dark:bg-charcoal-surface dark:border-charcoal-border dark:hover:bg-charcoal-border/60
-                    bg-cream-surface border-cream-border hover:bg-cream-border/60"
+                  className="h-9 px-3 rounded-full border text-xs font-semibold flex items-center gap-1.5 transition-colors
+                    bg-cream-surface border-cream-border hover:bg-cream-subtle
+                    dark:bg-charcoal-surface dark:border-charcoal-border dark:hover:bg-charcoal-subtle"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Sign out</span>
                 </button>
-              ) : (
-                <span className="hidden sm:inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border dark:border-charcoal-border border-cream-border dark:text-charcoal-muted text-cream-muted">
-                  Local Dev
-                </span>
               )}
             </div>
           ) : (
             <button
+              type="button"
               onClick={() => setView('auth')}
-              className="px-3.5 py-2 rounded-full border text-xs font-semibold flex items-center space-x-1.5 transition-all
-                dark:bg-charcoal-surface dark:border-charcoal-border dark:hover:bg-charcoal-border/60
-                bg-cream-surface border-cream-border hover:bg-cream-border/60"
+              className="h-9 px-3.5 rounded-full border text-xs font-semibold flex items-center gap-1.5 transition-colors
+                bg-cream-surface border-cream-border hover:bg-cream-subtle
+                dark:bg-charcoal-surface dark:border-charcoal-border dark:hover:bg-charcoal-subtle"
             >
               <LogIn className="w-3.5 h-3.5 text-coral" />
               <span>Sign in</span>
@@ -149,24 +148,26 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenNewRun }) => {
           )}
 
           <button
+            type="button"
             onClick={() => (currentView === 'landing' ? setView('learn') : onOpenNewRun())}
-            className="hidden sm:flex px-4 py-2 rounded-full text-xs font-semibold uppercase tracking-wider
-              bg-coral hover:bg-coral-hover text-white shadow-md shadow-coral/20 transition-all hover:scale-105 items-center space-x-1.5"
+            className="h-9 px-4 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-colors
+              bg-coral hover:bg-coral-hover text-white shadow-sm shadow-coral/25"
           >
             {currentView === 'landing' ? (
               <>
-                <BookOpen className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>See how it works</span>
+                <BookOpen className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Concepts</span>
+                <span className="sm:hidden">Learn</span>
               </>
             ) : (
               <>
-                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>Ask AgentLens</span>
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">New Execution</span>
+                <span className="sm:hidden">Run</span>
               </>
             )}
           </button>
         </div>
-
       </div>
     </header>
   );

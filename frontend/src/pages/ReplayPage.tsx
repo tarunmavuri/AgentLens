@@ -36,11 +36,9 @@ export const ReplayPage: React.FC = () => {
     loadRuns();
   }, []);
 
-  // Entering a run starts a replay from the first stored event.
   useEffect(() => {
     setIsReplaying(false);
     setReplayCursor(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRunId]);
 
   useEffect(() => {
@@ -78,36 +76,36 @@ export const ReplayPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b dark:border-charcoal-border border-cream-border">
+    <div className="p-5 sm:p-8 space-y-6 max-w-6xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-cream-border dark:border-charcoal-border">
         <div>
-          <span className="text-[11px] font-bold uppercase tracking-widest text-coral">
-            Replay
+          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-coral">
+            Monitor · Execution History
           </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
-            Watch a finished run again
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mt-1">
+            Historical Trace Replay
           </h1>
-          <p className="text-xs sm:text-sm dark:text-charcoal-muted text-cream-muted mt-1">
-            Move through a saved run one step at a time, like a video. Nothing is re-run, so this
-            costs nothing.
+          <p className="text-xs sm:text-sm text-cream-muted dark:text-charcoal-muted mt-1">
+            Scrub through persisted execution events step-by-step at zero model cost, or download
+            the JSON trace.
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center gap-2.5">
           <button
+            type="button"
             onClick={handleExportTrace}
             disabled={!selectedRunId}
-            className="px-4 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider 
-              border dark:border-charcoal-border border-cream-border dark:hover:bg-charcoal-border hover:bg-cream-border transition-colors flex items-center space-x-1.5 disabled:opacity-50"
+            className="h-9 px-4 rounded-full text-xs font-semibold border border-cream-border dark:border-charcoal-border bg-cream-surface dark:bg-charcoal-surface hover:border-coral transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export Trace JSON</span>
+            <span>Export JSON Trace</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setView('workspace')}
-            className="px-4 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider 
-              bg-coral hover:bg-coral-hover text-white shadow-md shadow-coral/20 transition-all hover:scale-[1.02]"
+            className="h-9 px-4 rounded-full text-xs font-semibold bg-coral hover:bg-coral-hover text-white transition-colors"
           >
             Open Live Graph
           </button>
@@ -115,24 +113,24 @@ export const ReplayPage: React.FC = () => {
       </div>
 
       {exportError && (
-        <div className="p-3 rounded-xl border border-red-500/30 bg-red-500/5 text-red-500 text-xs flex items-center space-x-2">
+        <div className="pl-3.5 border-l-2 border-statusError text-statusError text-xs flex items-center gap-2">
           <AlertCircle className="w-4 h-4" />
           <span>{exportError}</span>
         </div>
       )}
 
-      <div className="p-6 rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border space-y-5 shadow-sm">
+      <div className="py-4 border-b border-cream-border dark:border-charcoal-border space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-coral">
-              Select Run:
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-cream-muted dark:text-charcoal-muted">
+              Execution:
             </span>
             <select
               value={selectedRunId || ''}
               onChange={(event) => selectRun(event.target.value)}
-              className="px-3 py-1.5 rounded-xl border text-xs font-semibold dark:bg-charcoal-bg bg-cream-bg dark:border-charcoal-border border-cream-border max-w-sm truncate"
+              className="h-9 px-3 rounded-full border text-xs font-semibold bg-cream-surface dark:bg-charcoal-surface border-cream-border dark:border-charcoal-border max-w-xs sm:max-w-sm truncate"
             >
-              {runs.length === 0 && <option value="">No runs yet</option>}
+              {runs.length === 0 && <option value="">No executions yet</option>}
               {runs.map((run) => (
                 <option key={run.id} value={run.id}>
                   {run.id.includes('golden') ? `Demo · ${run.goal}` : run.goal}
@@ -141,9 +139,9 @@ export const ReplayPage: React.FC = () => {
             </select>
           </div>
 
-          <div className="text-xs font-mono dark:text-charcoal-muted text-cream-muted">
+          <div className="text-xs font-mono text-cream-muted dark:text-charcoal-muted">
             {activeRun ? `${activeRun.status.replace(/_/g, ' ')} · ` : ''}
-            Event {replayCursor} of {events.length}
+            Event {replayCursor} / {events.length}
           </div>
         </div>
 
@@ -160,44 +158,47 @@ export const ReplayPage: React.FC = () => {
             disabled={events.length === 0}
             className="w-full accent-coral h-2 cursor-pointer"
           />
-          <div className="flex justify-between text-[10px] font-mono dark:text-charcoal-muted text-cream-muted">
+          <div className="flex justify-between text-[10px] font-mono text-cream-muted dark:text-charcoal-muted">
             <span>Start</span>
-            <span>Cursor: #{replayCursor}</span>
+            <span>Event #{replayCursor}</span>
             <span>End (#{events.length})</span>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-          <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => {
                 setIsReplaying(false);
                 setReplayCursor(0);
               }}
               title="Reset to start"
-              className="p-2 rounded-xl border dark:border-charcoal-border border-cream-border hover:text-coral transition-colors"
+              className="h-9 w-9 rounded-full border border-cream-border dark:border-charcoal-border flex items-center justify-center hover:border-coral hover:text-coral transition-colors"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
 
             <button
+              type="button"
               onClick={() => {
                 setIsReplaying(false);
                 setReplayCursor(Math.max(0, replayCursor - 1));
               }}
               title="Step back"
-              className="p-2 rounded-xl border dark:border-charcoal-border border-cream-border hover:text-coral transition-colors"
+              className="h-9 w-9 rounded-full border border-cream-border dark:border-charcoal-border flex items-center justify-center hover:border-coral hover:text-coral transition-colors"
             >
               <SkipBack className="w-4 h-4" />
             </button>
 
             <button
+              type="button"
               onClick={() => {
                 if (atEnd) setReplayCursor(0);
                 setIsReplaying(!isReplaying);
               }}
               disabled={events.length === 0}
-              className="px-4 py-2 rounded-xl bg-coral hover:bg-coral-hover text-white text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 shadow-md shadow-coral/20 disabled:opacity-50"
+              className="h-9 px-5 rounded-full bg-coral hover:bg-coral-hover text-white text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50"
             >
               {isReplaying ? (
                 <Pause className="w-3.5 h-3.5" />
@@ -208,38 +209,41 @@ export const ReplayPage: React.FC = () => {
             </button>
 
             <button
+              type="button"
               onClick={() => {
                 setIsReplaying(false);
                 setReplayCursor(Math.min(events.length, replayCursor + 1));
               }}
               title="Step forward"
-              className="p-2 rounded-xl border dark:border-charcoal-border border-cream-border hover:text-coral transition-colors"
+              className="h-9 w-9 rounded-full border border-cream-border dark:border-charcoal-border flex items-center justify-center hover:border-coral hover:text-coral transition-colors"
             >
               <SkipForward className="w-4 h-4" />
             </button>
 
             <button
+              type="button"
               onClick={() => {
                 setIsReplaying(false);
                 setReplayCursor(events.length);
               }}
               title="Jump to end"
-              className="p-2 rounded-xl border dark:border-charcoal-border border-cream-border hover:text-coral transition-colors"
+              className="h-9 w-9 rounded-full border border-cream-border dark:border-charcoal-border flex items-center justify-center hover:border-coral hover:text-coral transition-colors"
             >
               <ChevronsRight className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="flex items-center space-x-1.5 text-xs">
-            <span className="dark:text-charcoal-muted text-cream-muted mr-1">Speed:</span>
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-cream-muted dark:text-charcoal-muted mr-1">Speed:</span>
             {[1, 2, 5].map((speed) => (
               <button
                 key={speed}
+                type="button"
                 onClick={() => setPlaybackSpeed(speed)}
-                className={`px-2.5 py-1 rounded-lg font-mono font-bold transition-colors ${
+                className={`px-3 py-1 rounded-full font-mono font-semibold transition-colors ${
                   playbackSpeed === speed
                     ? 'bg-coral text-white'
-                    : 'dark:bg-charcoal-bg bg-cream-bg dark:border-charcoal-border border-cream-border border'
+                    : 'border border-cream-border dark:border-charcoal-border'
                 }`}
               >
                 {speed}x
@@ -249,7 +253,7 @@ export const ReplayPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="rounded-2xl border overflow-hidden h-96 dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border">
+      <div className="border-b border-cream-border dark:border-charcoal-border overflow-hidden h-96">
         <ActivityTimeline events={visibleEvents} />
       </div>
     </div>

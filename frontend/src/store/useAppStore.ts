@@ -10,9 +10,12 @@ export type ViewType =
   | 'workspace'
   | 'agents'
   | 'builder'
+  | 'templates'
   | 'evals'
   | 'history'
   | 'settings';
+
+export type SettingsTab = 'account' | 'preferences';
 
 interface AppState {
   theme: 'dark' | 'light';
@@ -21,6 +24,8 @@ interface AppState {
 
   currentView: ViewType;
   setView: (view: ViewType) => void;
+  settingsTab: SettingsTab;
+  setSettingsTab: (tab: SettingsTab) => void;
 
   runs: RunSummary[];
   runsLoading: boolean;
@@ -86,6 +91,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   currentView: 'landing',
   setView: (currentView) => set({ currentView }),
+  settingsTab: 'preferences',
+  setSettingsTab: (settingsTab) => set({ settingsTab }),
 
   runs: [],
   runsLoading: false,

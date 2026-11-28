@@ -12,6 +12,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { LiveWorkspacePage } from './pages/LiveWorkspacePage';
 import { AgentsPage } from './pages/AgentsPage';
 import { CustomAgentBuilderPage } from './pages/CustomAgentBuilderPage';
+import { TemplatesPage } from './pages/TemplatesPage';
 import { EvaluationsPage } from './pages/EvaluationsPage';
 import { ReplayPage } from './pages/ReplayPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -31,6 +32,7 @@ export const App: React.FC = () => {
   } = useAppStore();
   const { user, initialized, loadSession } = useAuthStore();
   const [isNewRunModalOpen, setIsNewRunModalOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     setTheme(theme);
@@ -66,8 +68,8 @@ export const App: React.FC = () => {
 
     if (!initialized) {
       return (
-        <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center text-sm dark:text-charcoal-muted text-cream-muted">
-          Checking authentication…
+        <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center text-sm text-cream-muted dark:text-charcoal-muted">
+          Checking session…
         </div>
       );
     }
@@ -80,11 +82,13 @@ export const App: React.FC = () => {
       case 'dashboard':
         return <DashboardPage onOpenNewRun={handleOpenNewRun} />;
       case 'workspace':
-        return <LiveWorkspacePage />;
+        return <LiveWorkspacePage onOpenNewRun={handleOpenNewRun} />;
       case 'agents':
         return <AgentsPage />;
       case 'builder':
         return <CustomAgentBuilderPage />;
+      case 'templates':
+        return <TemplatesPage />;
       case 'evals':
         return <EvaluationsPage />;
       case 'history':
@@ -99,15 +103,27 @@ export const App: React.FC = () => {
   const isFullPage = PUBLIC_VIEWS.has(currentView) || !user;
 
   return (
-    <div className={`min-h-screen transition-colors duration-200 ${theme === 'dark' ? 'dark bg-charcoal-bg text-charcoal-text' : 'light bg-cream-bg text-cream-text'}`}>
-      <Navbar onOpenNewRun={handleOpenNewRun} />
+    <div
+      className={`min-h-screen transition-colors duration-200 bg-cream-bg text-cream-text dark:bg-charcoal-bg dark:text-charcoal-text ${
+        theme === 'dark' ? 'dark' : 'light'
+      }`}
+    >
+      <Navbar
+        onOpenNewRun={handleOpenNewRun}
+        showMobileMenuButton={!isFullPage}
+        onOpenMobileMenu={() => setMobileMenuOpen(true)}
+      />
 
       {isFullPage ? (
         <main>{renderCurrentView()}</main>
       ) : (
         <div className="flex">
-          <Sidebar onOpenNewRun={handleOpenNewRun} />
-          <main className="flex-1 overflow-x-hidden min-h-[calc(100vh-4rem)]">
+          <Sidebar
+            onOpenNewRun={handleOpenNewRun}
+            mobileOpen={mobileMenuOpen}
+            onCloseMobile={() => setMobileMenuOpen(false)}
+          />
+          <main className="flex-1 min-w-0 overflow-x-hidden min-h-[calc(100vh-4rem)]">
             {renderCurrentView()}
           </main>
         </div>

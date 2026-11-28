@@ -1,32 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import {
-  Play,
-  Sparkles,
   Download,
-  Activity,
-  Users,
-  Clock,
   AlertCircle,
   RefreshCw,
   RotateCcw,
   ArrowRight,
-  BookOpen,
+  PlusCircle,
+  PlayCircle,
+  Bot,
 } from 'lucide-react';
 import * as api from '../api/client';
 import { RunStatus } from '../types';
 import { statusLabel } from '../lib/plain';
+import { InfoTooltip } from '../components/ui/InfoTooltip';
 
 interface DashboardPageProps {
   onOpenNewRun: () => void;
 }
 
 const statusClasses: Record<RunStatus, string> = {
-  queued: 'bg-coral/10 text-coral animate-pulse',
-  running: 'bg-coral/10 text-coral animate-pulse',
-  completed: 'bg-emerald-500/10 text-emerald-500',
-  completed_with_errors: 'bg-amber-500/10 text-amberAccent',
-  failed: 'bg-red-500/10 text-red-500',
+  queued: 'bg-amberAccent/15 text-amberAccent',
+  running: 'bg-coral/15 text-coral',
+  completed: 'bg-statusSuccess/10 text-statusSuccess',
+  completed_with_errors: 'bg-amberAccent/15 text-amberAccent',
+  failed: 'bg-statusError/10 text-statusError',
 };
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) => {
@@ -39,6 +37,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
     setView,
     agents,
     loadAgents,
+    setEditingAgent,
   } = useAppStore();
   const [downloadingTrace, setDownloadingTrace] = useState<string | null>(null);
 
@@ -55,6 +54,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
   );
   const totalCost = runs.reduce((acc, run) => acc + (run.totals.cost_usd || 0), 0);
   const builtInCount = agents.filter((agent) => agent.agent_type === 'built_in').length;
+  const enabledAgents = agents.filter((agent) => agent.enabled);
 
   const handleExportTrace = async (runId: string, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -72,261 +72,343 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onOpenNewRun }) =>
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : 'Could not download the trace');
+      alert(error instanceof Error ? error.message : 'Could not download trace');
     } finally {
       setDownloadingTrace(null);
     }
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-8 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b dark:border-charcoal-border border-cream-border">
-        <div>
-          <span className="text-[11px] font-bold uppercase tracking-widest text-coral">
-            My Runs
+    <div className="p-5 sm:p-8 space-y-10 max-w-7xl mx-auto">
+      {/* 1. Welcome & Primary Actions */}
+      <section className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 pb-6 border-b border-cream-border dark:border-charcoal-border">
+        <div className="space-y-1.5 max-w-2xl">
+          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-coral">
+            Overview
           </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
-            Everything you've asked AgentLens
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            Your multi-agent{' '}
+            <span className="font-editorial italic font-normal text-coral">execution studio.</span>
           </h1>
-          <p className="text-xs sm:text-sm dark:text-charcoal-muted text-cream-muted mt-1">
-            Each row is one question and how the agent team handled it. Click a row to watch it back.
+          <p className="text-xs sm:text-sm text-cream-muted dark:text-charcoal-muted leading-relaxed">
+            Ask a question, follow how specialist agents collaborate, and inspect every tool call,
+            Critic score, and replayable event.
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        {/* 2. Action Controls */}
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
+            type="button"
             onClick={() => {
               loadRuns();
               loadAgents();
             }}
-            title="Refresh the list"
-            className="p-2.5 rounded-xl border dark:border-charcoal-border border-cream-border dark:hover:bg-charcoal-border hover:bg-cream-border transition-colors"
+            title="Refresh runs and agents"
+            aria-label="Refresh overview"
+            className="h-9 w-9 rounded-full border border-cream-border dark:border-charcoal-border bg-cream-surface dark:bg-charcoal-surface hover:border-coral transition-colors flex items-center justify-center"
           >
             <RefreshCw className={`w-4 h-4 ${runsLoading ? 'animate-spin' : ''}`} />
           </button>
 
           <button
-            onClick={() => setView('builder')}
-            className="px-4 py-2.5 rounded-xl text-xs font-semibold
-              border dark:border-charcoal-border border-cream-border dark:hover:bg-charcoal-border hover:bg-cream-border transition-colors flex items-center space-x-1.5"
+            type="button"
+            onClick={() => {
+              setEditingAgent(null);
+              setView('builder');
+            }}
+            className="h-9 px-4 rounded-full text-xs font-semibold border border-cream-border dark:border-charcoal-border bg-cream-surface dark:bg-charcoal-surface hover:border-coral transition-colors inline-flex items-center gap-1.5"
           >
-            <Users className="w-3.5 h-3.5" />
-            <span>Build an agent</span>
+            <PlusCircle className="w-3.5 h-3.5 text-amberAccent" />
+            <span>Create Custom Agent</span>
           </button>
 
           <button
+            type="button"
             onClick={onOpenNewRun}
-            className="px-5 py-2.5 rounded-xl text-xs font-semibold
-              bg-coral hover:bg-coral-hover text-white shadow-md shadow-coral/20 transition-all hover:scale-[1.02] flex items-center space-x-2"
+            className="h-9 px-5 rounded-full text-xs font-semibold bg-coral hover:bg-coral-hover text-white shadow-sm shadow-coral/25 transition-colors inline-flex items-center gap-1.5"
           >
-            <Sparkles className="w-4 h-4" />
-            <span>Ask AgentLens</span>
+            <PlayCircle className="w-4 h-4" />
+            <span>Create New Execution</span>
+          </button>
+        </div>
+      </section>
+
+      {/* Beginner Guidance Note (Open left-border callout, not a box!) */}
+      <div className="pl-4 border-l-2 border-coral flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <p className="text-xs sm:text-sm text-cream-muted dark:text-charcoal-muted leading-relaxed">
+          <span className="font-semibold text-cream-text dark:text-charcoal-text">
+            New to Agentic AI?
+          </span>{' '}
+          Pick a pre-built experiment in Templates or inspect a recorded demo trace below to watch
+          how the Planner, Researcher, Coder, and Critic collaborate.
+        </p>
+        <div className="flex items-center gap-4 flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => setView('templates')}
+            className="text-xs font-semibold text-amberAccent hover:underline whitespace-nowrap"
+          >
+            Try Templates
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('learn')}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-coral hover:underline whitespace-nowrap"
+          >
+            <span>Learn Concepts</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* First-timer orientation */}
-      <div className="rounded-2xl border border-coral/25 bg-coral/5 px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
-        <BookOpen className="w-5 h-5 text-coral flex-shrink-0" />
-        <p className="text-xs sm:text-sm leading-relaxed flex-1">
-          <span className="font-bold">New here?</span> You ask one question; a Planner splits it into
-          small jobs, specialist agents do them, and a Critic scores the result before you see it.
-        </p>
-        <button
-          onClick={() => setView('learn')}
-          className="inline-flex items-center space-x-1 text-xs font-bold text-coral hover:underline whitespace-nowrap"
-        >
-          <span>See how it works</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
       {runsError && (
-        <div className="p-4 rounded-2xl border border-red-500/30 bg-red-500/5 text-red-500 text-xs flex items-start space-x-2">
+        <div className="pl-4 border-l-2 border-statusError text-statusError text-xs flex items-start gap-2">
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="font-bold">Could not load your runs</p>
-            <p className="mt-0.5 dark:text-red-400/80">{runsError}</p>
+            <p className="font-semibold">Could not load executions</p>
+            <p className="mt-0.5 opacity-90">{runsError}</p>
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="p-5 rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">
-              Runs
-            </span>
-            <Activity className="w-4 h-4 text-coral" />
+      {/* 3. Existing Agents — Open Editorial Roster (No boxed card soup!) */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold tracking-tight">Existing Agents</h2>
+            <p className="text-xs text-cream-muted dark:text-charcoal-muted">
+              {enabledAgents.length} active helpers ready for orchestration ({builtInCount}{' '}
+              built-in, {Math.max(0, agents.length - builtInCount)} custom).
+            </p>
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold">
-            {runsLoading && runs.length === 0 ? '—' : totalRuns}
-          </div>
-          <div className="text-[11px] text-emerald-500 font-medium">
-            {completedRuns} finished without problems
-          </div>
+          <button
+            type="button"
+            onClick={() => setView('agents')}
+            className="text-xs font-semibold text-coral hover:underline inline-flex items-center gap-1"
+          >
+            <span>Agent Workspace</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
 
-        <div className="p-5 rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">
-              Agents on your team
-            </span>
-            <Users className="w-4 h-4 text-amberAccent" />
-          </div>
-          <div className="text-2xl sm:text-3xl font-extrabold">{agents.length}</div>
-          <div className="text-[11px] dark:text-charcoal-muted text-cream-muted">
-            {builtInCount} built-in · {Math.max(0, agents.length - builtInCount)} yours
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4 border-t border-cream-border dark:border-charcoal-border pt-4">
+          {agents.slice(0, 6).map((agent) => (
+            <button
+              key={agent.agent_id}
+              type="button"
+              onClick={() => setView('agents')}
+              className="py-2.5 border-b border-cream-border/70 dark:border-charcoal-border/70 text-left group flex items-start justify-between gap-3 hover:border-coral transition-colors"
+            >
+              <div className="flex items-start gap-2.5 min-w-0">
+                <span
+                  className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${
+                    agent.enabled
+                      ? agent.agent_type === 'custom'
+                        ? 'bg-amberAccent'
+                        : 'bg-coral'
+                      : 'bg-cream-muted/40 dark:bg-charcoal-muted/40'
+                  }`}
+                />
+                <div className="min-w-0">
+                  <div className="font-semibold text-xs group-hover:text-coral transition-colors truncate flex items-center gap-1.5">
+                    <Bot className="w-3.5 h-3.5 text-cream-muted dark:text-charcoal-muted flex-shrink-0" />
+                    <span className="truncate">{agent.name}</span>
+                  </div>
+                  <p className="text-[11px] text-cream-muted dark:text-charcoal-muted line-clamp-1 mt-0.5">
+                    {agent.role}
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-mono text-cream-muted dark:text-charcoal-muted flex-shrink-0 pt-0.5">
+                {agent.allowed_tools?.length || 0} tools
+              </span>
+            </button>
+          ))}
         </div>
+      </section>
 
-        <div className="p-5 rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">
-              Words processed
-            </span>
-            <Clock className="w-4 h-4 text-blue-500" />
-          </div>
-          <div className="text-2xl sm:text-3xl font-extrabold">
-            {totalTokens.toLocaleString()}
-          </div>
-          <div className="text-[11px] dark:text-charcoal-muted text-cream-muted">
-            Tokens read and written across all runs
-          </div>
-        </div>
-
-        <div className="p-5 rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">
-              Estimated cost
-            </span>
-            <span className="text-xs font-bold text-coral">USD</span>
-          </div>
-          <div className="text-2xl sm:text-3xl font-extrabold">${totalCost.toFixed(5)}</div>
-          <div className="text-[11px] dark:text-charcoal-muted text-cream-muted">
-            Based on the published price of each model
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-4">
+      {/* 4. Recent Executions — Unboxed Ledger Table */}
+      <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-bold tracking-tight">Recent runs</h2>
-          <span className="text-xs dark:text-charcoal-muted text-cream-muted">
-            Click any row to watch it live or replay it
-          </span>
+          <div>
+            <h2 className="text-base font-bold tracking-tight">Recent Executions</h2>
+            <p className="text-xs text-cream-muted dark:text-charcoal-muted">
+              Click any row to open the live graph or replay its persisted event timeline.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setView('history')}
+            className="text-xs font-semibold text-coral hover:underline"
+          >
+            Execution History
+          </button>
         </div>
 
-        <div className="rounded-2xl border overflow-hidden dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b dark:border-charcoal-border border-cream-border dark:bg-charcoal-bg/60 bg-cream-bg/60 text-[10px] uppercase font-bold tracking-wider dark:text-charcoal-muted text-cream-muted">
-                  <th className="py-3 px-4">What you asked</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Words</th>
-                  <th className="py-3 px-4">Cost</th>
-                  <th className="py-3 px-4">Time</th>
-                  <th className="py-3 px-4">Critic</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+        <div className="border-y border-cream-border dark:border-charcoal-border overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-cream-border dark:border-charcoal-border text-[10px] uppercase font-bold tracking-wider text-cream-muted dark:text-charcoal-muted">
+                <th className="py-3 pr-4">Goal</th>
+                <th className="py-3 px-3">Status</th>
+                <th className="py-3 px-3">Tokens</th>
+                <th className="py-3 px-3">Est. Cost</th>
+                <th className="py-3 px-3">Duration</th>
+                <th className="py-3 px-3">Critic Score</th>
+                <th className="py-3 pl-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-cream-border/70 dark:divide-charcoal-border/70">
+              {runs.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-10 text-center space-y-2">
+                    <p className="text-sm font-semibold">
+                      {runsLoading ? 'Loading executions…' : 'No executions yet'}
+                    </p>
+                    {!runsLoading && (
+                      <p className="text-xs text-cream-muted dark:text-charcoal-muted max-w-md mx-auto">
+                        Press <span className="font-semibold text-coral">Create New Execution</span>{' '}
+                        above or pick an experiment in Templates to get started.
+                      </p>
+                    )}
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y dark:divide-charcoal-border divide-cream-border">
-                {runs.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-10 text-center dark:text-charcoal-muted text-cream-muted">
-                      {runsLoading
-                        ? 'Loading your runs…'
-                        : 'Nothing here yet. Press “Ask AgentLens” to run your first question.'}
+              ) : (
+                runs.slice(0, 10).map((run) => (
+                  <tr
+                    key={run.id}
+                    onClick={() => {
+                      selectRun(run.id);
+                      setView('workspace');
+                    }}
+                    className="cursor-pointer transition-colors hover:bg-cream-surface/70 dark:hover:bg-charcoal-surface/70 group"
+                  >
+                    <td className="py-3.5 pr-4 max-w-xs sm:max-w-md">
+                      <div className="font-semibold text-xs line-clamp-1 group-hover:text-coral transition-colors">
+                        {run.goal}
+                      </div>
+                      <div className="text-[10px] font-mono text-cream-muted dark:text-charcoal-muted mt-0.5">
+                        {run.id} {run.id.includes('golden') && '· recorded demo'}
+                      </div>
+                    </td>
+
+                    <td className="py-3.5 px-3">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                          statusClasses[run.status] ?? statusClasses.queued
+                        }`}
+                      >
+                        {statusLabel(run.status)}
+                      </span>
+                    </td>
+
+                    <td className="py-3.5 px-3 font-mono text-[11px]">
+                      {((run.totals.in_tokens || 0) + (run.totals.out_tokens || 0)).toLocaleString()}
+                    </td>
+
+                    <td className="py-3.5 px-3 font-mono text-[11px]">
+                      ${(run.totals.cost_usd || 0).toFixed(5)}
+                    </td>
+
+                    <td className="py-3.5 px-3 font-mono text-[11px]">
+                      {run.totals.duration_seconds ? `${run.totals.duration_seconds}s` : '—'}
+                    </td>
+
+                    <td className="py-3.5 px-3 font-semibold text-xs text-coral">
+                      {run.totals.average_critic_score != null
+                        ? `${run.totals.average_critic_score}/10`
+                        : '—'}
+                    </td>
+
+                    <td className="py-3.5 pl-3 text-right space-x-1.5 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={(event) => handleExportTrace(run.id, event)}
+                        title="Export trace JSON"
+                        disabled={downloadingTrace === run.id}
+                        className="p-1.5 rounded-full border border-cream-border dark:border-charcoal-border hover:border-coral hover:text-coral transition-colors disabled:opacity-50"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          selectRun(run.id);
+                          setView('history');
+                        }}
+                        title="Replay step by step"
+                        className="p-1.5 rounded-full border border-cream-border dark:border-charcoal-border hover:border-coral hover:text-coral transition-colors"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
                     </td>
                   </tr>
-                ) : (
-                  runs.map((run) => (
-                    <tr
-                      key={run.id}
-                      onClick={() => {
-                        selectRun(run.id);
-                        setView('workspace');
-                      }}
-                      className="cursor-pointer transition-colors dark:hover:bg-charcoal-bg hover:bg-cream-bg group"
-                    >
-                      <td className="py-3.5 px-4 max-w-xs sm:max-w-md">
-                        <div className="font-semibold text-xs line-clamp-1 group-hover:text-coral transition-colors">
-                          {run.goal}
-                        </div>
-                        <div className="text-[10px] font-mono dark:text-charcoal-muted text-cream-muted mt-0.5">
-                          {run.id} {run.id.includes('golden') && '· demo run'}
-                        </div>
-                      </td>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-                      <td className="py-3.5 px-4">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            statusClasses[run.status] ?? statusClasses.queued
-                          }`}
-                        >
-                          {statusLabel(run.status)}
-                        </span>
-                      </td>
+      {/* 5. Usage & Performance Summary — Clean Hairline Stat Strip (No 4-Box Grid!) */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-base font-bold tracking-tight">Usage & Performance Summary</h2>
+          <p className="text-xs text-cream-muted dark:text-charcoal-muted">
+            Totals derived from persisted executions in your workspace.
+          </p>
+        </div>
 
-                      <td className="py-3.5 px-4 font-mono text-[11px]">
-                        {((run.totals.in_tokens || 0) + (run.totals.out_tokens || 0)).toLocaleString()}
-                      </td>
+        <div className="grid grid-cols-2 lg:grid-cols-4 border-y border-cream-border dark:border-charcoal-border divide-y sm:divide-y-0 lg:divide-x divide-cream-border dark:divide-charcoal-border">
+          <div className="py-4 lg:pr-6 space-y-1">
+            <span className="text-[11px] font-semibold text-cream-muted dark:text-charcoal-muted block">
+              Executions
+            </span>
+            <div className="text-2xl sm:text-3xl font-bold">
+              {runsLoading && runs.length === 0 ? '—' : totalRuns}
+            </div>
+            <div className="text-[11px] text-statusSuccess font-medium">
+              {completedRuns} completed cleanly
+            </div>
+          </div>
 
-                      <td className="py-3.5 px-4 font-mono text-[11px]">
-                        ${(run.totals.cost_usd || 0).toFixed(5)}
-                      </td>
+          <div className="py-4 lg:px-6 space-y-1">
+            <span className="text-[11px] font-semibold text-cream-muted dark:text-charcoal-muted block">
+              Registered Agents
+            </span>
+            <div className="text-2xl sm:text-3xl font-bold">{agents.length}</div>
+            <div className="text-[11px] text-cream-muted dark:text-charcoal-muted">
+              {builtInCount} built-in · {Math.max(0, agents.length - builtInCount)} custom
+            </div>
+          </div>
 
-                      <td className="py-3.5 px-4 font-mono text-[11px]">
-                        {run.totals.duration_seconds ? `${run.totals.duration_seconds}s` : '—'}
-                      </td>
+          <div className="py-4 lg:px-6 space-y-1">
+            <span className="text-[11px] font-semibold text-cream-muted dark:text-charcoal-muted block">
+              Tokens Consumed
+              <InfoTooltip text="Total input and output tokens processed by Gemini across all runs." />
+            </span>
+            <div className="text-2xl sm:text-3xl font-bold">{totalTokens.toLocaleString()}</div>
+            <div className="text-[11px] text-cream-muted dark:text-charcoal-muted">
+              Persisted event telemetry
+            </div>
+          </div>
 
-                      <td className="py-3.5 px-4 font-bold text-xs text-coral" title="Average Critic score out of 10">
-                        {run.totals.average_critic_score != null
-                          ? `${run.totals.average_critic_score}/10`
-                          : '—'}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right space-x-2">
-                        <button
-                          onClick={(event) => handleExportTrace(run.id, event)}
-                          title="Download this run as a JSON file"
-                          disabled={downloadingTrace === run.id}
-                          className="p-1.5 rounded-lg border dark:border-charcoal-border border-cream-border dark:hover:bg-charcoal-border hover:bg-cream-border transition-colors text-neutral-400 hover:text-coral disabled:opacity-50"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            selectRun(run.id);
-                            setView('workspace');
-                          }}
-                          title="Watch this run"
-                          className="p-1.5 rounded-lg border dark:border-charcoal-border border-cream-border dark:hover:bg-charcoal-border hover:bg-cream-border transition-colors text-neutral-400 hover:text-coral"
-                        >
-                          <Play className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            selectRun(run.id);
-                            setView('history');
-                          }}
-                          title="Replay this run step by step"
-                          className="p-1.5 rounded-lg border dark:border-charcoal-border border-cream-border dark:hover:bg-charcoal-border hover:bg-cream-border transition-colors text-neutral-400 hover:text-coral"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div className="py-4 lg:pl-6 space-y-1">
+            <span className="text-[11px] font-semibold text-cream-muted dark:text-charcoal-muted block">
+              Estimated Cost
+              <InfoTooltip text="Estimated USD cost derived from model token rates." />
+            </span>
+            <div className="text-2xl sm:text-3xl font-bold text-coral">
+              ${totalCost.toFixed(5)}
+            </div>
+            <div className="text-[11px] text-cream-muted dark:text-charcoal-muted">
+              Offline simulation costs $0.00
+            </div>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 };

@@ -8,38 +8,45 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Theme tokens from reference screenshots
+        // Warm Editorial Light Theme
         cream: {
-          bg: '#F5F0EA',
-          surface: '#FFFDFC',
-          border: '#EAE3D9',
-          muted: '#8A827B',
-          text: '#1D1919'
+          bg: '#F6F1EA',
+          surface: '#FFFDF9',
+          subtle: '#EDE5DA',
+          border: '#E5DACD',
+          muted: '#746A61',
+          text: '#1C1817',
         },
+        // Warm Deep Charcoal Dark Theme
         charcoal: {
           bg: '#151217',
-          surface: '#201B20',
-          border: '#2E2730',
-          muted: '#9F95A3',
-          text: '#F6F0EB'
+          surface: '#1F1A21',
+          subtle: '#28222B',
+          border: '#332B36',
+          muted: '#A499AA',
+          text: '#F6F0EB',
         },
+        // Signature Coral-Red & Warm Amber accents
         coral: {
           DEFAULT: '#FF513C',
-          hover: '#E84532',
+          hover: '#E6422E',
+          light: '#FF6B58',
           subtle: '#FFF1EF',
-          darkSubtle: '#331B19'
         },
         amberAccent: {
           DEFAULT: '#F47742',
-          hover: '#DD6430'
-        }
+          hover: '#DE6531',
+        },
+        statusSuccess: '#16A34A',
+        statusError: '#DC2626',
+        statusWarning: '#EA580C',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        serif: ['Instrument Serif', 'Playfair Display', 'Georgia', 'serif'],
-      }
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        serif: ['Instrument Serif', 'Georgia', 'serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+      },
     },
   },
   plugins: [],
-}
-
+};

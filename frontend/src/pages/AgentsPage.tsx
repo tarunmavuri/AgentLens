@@ -1,22 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { AgentDefinition, AgentExecution } from '../types';
-import { 
-  Bot, 
-  Plus, 
-  Trash2, 
-  Copy, 
-  Edit3, 
-  Play, 
-  Wrench, 
-  ShieldCheck, 
-  Search, 
-  CheckCircle,
+import {
+  Bot,
+  Plus,
+  Trash2,
+  Copy,
+  Edit3,
+  Play,
+  History,
+  AlertCircle,
   ToggleLeft,
   ToggleRight,
   Sparkles,
-  History,
-  AlertCircle
+  X,
 } from 'lucide-react';
 import * as api from '../api/client';
 
@@ -36,7 +33,7 @@ export const AgentsPage: React.FC = () => {
     loadAgents();
   }, []);
 
-  const filteredAgents = agents.filter(a => {
+  const filteredAgents = agents.filter((a) => {
     if (filter === 'all') return true;
     return a.agent_type === filter;
   });
@@ -46,7 +43,7 @@ export const AgentsPage: React.FC = () => {
       await api.toggleAgent(agentId);
       await loadAgents();
     } catch (err) {
-      console.error(err);
+      alert(err instanceof Error ? err.message : 'Cannot toggle this agent.');
     }
   };
 
@@ -55,17 +52,16 @@ export const AgentsPage: React.FC = () => {
       await api.duplicateAgent(agentId);
       await loadAgents();
     } catch (err) {
-      console.error(err);
+      alert(err instanceof Error ? err.message : 'Failed to duplicate agent.');
     }
   };
 
   const handleDelete = async (agentId: string) => {
-    if (!confirm('Are you sure you want to delete this custom agent?')) return;
+    if (!confirm('Delete this custom agent?')) return;
     try {
       await api.deleteAgent(agentId);
       await loadAgents();
     } catch (err) {
-      console.error(err);
       alert(err instanceof Error ? err.message : 'Cannot delete this agent.');
     }
   };
@@ -77,7 +73,6 @@ export const AgentsPage: React.FC = () => {
       const res = await api.testAgent(testingAgent.agent_id, testPrompt);
       setTestResult(res);
     } catch (err) {
-      console.error(err);
       alert(err instanceof Error ? err.message : 'Agent test execution failed');
     } finally {
       setIsTesting(false);
@@ -102,184 +97,200 @@ export const AgentsPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-8 max-w-7xl mx-auto">
-      
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b dark:border-charcoal-border border-cream-border">
+    <div className="p-5 sm:p-8 space-y-8 max-w-6xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-cream-border dark:border-charcoal-border">
         <div>
-          <span className="text-[11px] font-bold uppercase tracking-widest text-coral">
-            Your team
+          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-coral">
+            Build · Agent Workspace
           </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
-            Meet your agents
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mt-1">
+            Registered Agents
           </h1>
-          <p className="text-xs sm:text-sm dark:text-charcoal-muted text-cream-muted mt-1">
-            Each agent has one clear job. Built-in agents come with AgentLens; the ones you build
-            show up here too.
+          <p className="text-xs sm:text-sm text-cream-muted dark:text-charcoal-muted mt-1">
+            Inspect specialists, run isolated agent verification checks, or clone templates into
+            custom agents.
           </p>
         </div>
 
         <button
+          type="button"
           onClick={() => {
             setEditingAgent(null);
             setView('builder');
           }}
-          className="px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider 
-            bg-coral hover:bg-coral-hover text-white shadow-md shadow-coral/20 transition-all hover:scale-[1.02] flex items-center space-x-2"
+          className="h-9 px-4 rounded-full text-xs font-semibold bg-coral hover:bg-coral-hover text-white shadow-sm shadow-coral/25 transition-colors inline-flex items-center gap-1.5 self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
-          <span>Create Custom Agent</span>
+          <span>Create Agent</span>
         </button>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex items-center space-x-2">
+      {/* Filter Pills */}
+      <div className="flex items-center gap-2">
         {(['all', 'built_in', 'custom'] as const).map((tab) => (
           <button
             key={tab}
+            type="button"
             onClick={() => setFilter(tab)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
+            className={`h-8 px-4 rounded-full text-xs font-semibold transition-colors ${
               filter === tab
-                ? 'bg-coral text-white shadow-sm'
-                : 'dark:bg-charcoal-surface dark:text-charcoal-muted bg-cream-surface text-cream-muted border dark:border-charcoal-border border-cream-border'
+                ? 'bg-coral text-white'
+                : 'border border-cream-border dark:border-charcoal-border text-cream-muted dark:text-charcoal-muted hover:border-coral'
             }`}
           >
-            {tab === 'all' ? 'All Agents' : tab === 'built_in' ? 'Built-in Agents' : 'Custom Agents'}
+            {tab === 'all' ? 'All Agents' : tab === 'built_in' ? 'Built-in' : 'Custom'}
           </button>
         ))}
       </div>
 
-      {/* Agent Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Editorial Directory Rows (No rigid boxed card grid!) */}
+      <div className="divide-y divide-cream-border dark:divide-charcoal-border border-y border-cream-border dark:border-charcoal-border">
         {filteredAgents.map((agent) => {
           const isBuiltIn = agent.agent_type === 'built_in';
+          const isSystemTemplate = agent.user_id === 'system';
+          const isUserOwned = !isBuiltIn && !isSystemTemplate;
+
           return (
             <div
               key={agent.agent_id}
-              className={`p-6 rounded-2xl border transition-all duration-200 flex flex-col justify-between
-                dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border shadow-sm ${
-                  !agent.enabled ? 'opacity-60' : 'hover:-translate-y-1'
-                }`}
+              className={`py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-5 transition-opacity ${
+                !agent.enabled ? 'opacity-60' : ''
+              }`}
             >
-              <div className="space-y-4">
-                {/* Card Top */}
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${
-                      isBuiltIn ? 'bg-coral/10 text-coral' : 'bg-purple-500/10 text-purple-500'
-                    }`}>
-                      <Bot className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-base leading-tight">{agent.name}</h3>
-                      <p className="text-[11px] font-semibold text-coral tracking-wide">{agent.role}</p>
-                    </div>
-                  </div>
-
-                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                    isBuiltIn ? 'dark:bg-charcoal-bg bg-cream-bg text-neutral-400' : 'bg-purple-500/10 text-purple-500'
-                  }`}>
-                    {agent.agent_type}
-                  </span>
+              {/* Left Identity & Description */}
+              <div className="flex items-start gap-3.5 max-w-2xl">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                    isBuiltIn ? 'bg-coral/15 text-coral' : 'bg-amberAccent/15 text-amberAccent'
+                  }`}
+                >
+                  <Bot className="w-5 h-5" />
                 </div>
 
-                {/* Description */}
-                <p className="text-xs dark:text-charcoal-muted text-cream-muted leading-relaxed line-clamp-3">
-                  {agent.description}
-                </p>
-
-                {/* Model and Tools */}
-                <div className="space-y-2 pt-2 border-t dark:border-charcoal-border border-cream-border">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="dark:text-charcoal-muted text-cream-muted font-medium">Model:</span>
-                    <span className="font-mono font-semibold">{agent.llm_config?.model || 'gemini-2.5-flash'}</span>
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-bold text-base tracking-tight">{agent.name}</h3>
+                    <span
+                      className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${
+                        isBuiltIn
+                          ? 'bg-cream-subtle dark:bg-charcoal-subtle text-cream-muted dark:text-charcoal-muted'
+                          : isSystemTemplate
+                            ? 'bg-coral/10 text-coral'
+                            : 'bg-amberAccent/15 text-amberAccent'
+                      }`}
+                    >
+                      {isBuiltIn ? 'Built-in' : isSystemTemplate ? 'Template' : 'Custom'}
+                    </span>
+                    <span className="text-[11px] font-mono text-cream-muted dark:text-charcoal-muted">
+                      {agent.llm_config?.model || 'gemini-2.5-flash'}
+                    </span>
                   </div>
 
-                  <div className="text-[11px]">
-                    <span className="dark:text-charcoal-muted text-cream-muted font-medium block mb-1">Allowed Tools:</span>
-                    <div className="flex flex-wrap gap-1">
-                      {agent.allowed_tools && agent.allowed_tools.length > 0 ? (
-                        agent.allowed_tools.map((t) => (
-                          <span 
-                            key={t}
-                            className="px-2 py-0.5 rounded-md text-[10px] font-mono dark:bg-charcoal-bg bg-cream-bg border dark:border-charcoal-border border-cream-border"
-                          >
-                            {t}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-[10px] italic text-neutral-400">None (Pure Reasoning)</span>
-                      )}
-                    </div>
+                  <p className="text-xs font-medium text-coral">{agent.role}</p>
+                  <p className="text-xs text-cream-muted dark:text-charcoal-muted leading-relaxed">
+                    {agent.description}
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    {agent.allowed_tools && agent.allowed_tools.length > 0 ? (
+                      agent.allowed_tools.map((t) => (
+                        <span
+                          key={t}
+                          className="px-2.5 py-0.5 rounded-full text-[10px] font-mono border border-cream-border dark:border-charcoal-border bg-cream-surface dark:bg-charcoal-surface"
+                        >
+                          {t}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-[11px] italic text-cream-muted dark:text-charcoal-muted">
+                        Reasoning only (no tools)
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Action Bar */}
-              <div className="pt-5 mt-4 border-t dark:border-charcoal-border border-cream-border flex items-center justify-between">
-                <button
-                  onClick={() => handleToggle(agent.agent_id)}
-                  title={agent.enabled ? 'Click to disable' : 'Click to enable'}
-                  className="flex items-center space-x-1 text-xs font-semibold"
-                >
-                  {agent.enabled ? (
-                    <>
-                      <ToggleRight className="w-5 h-5 text-emerald-500" />
-                      <span className="text-[11px] text-emerald-500">Enabled</span>
-                    </>
-                  ) : (
-                    <>
-                      <ToggleLeft className="w-5 h-5 text-neutral-400" />
-                      <span className="text-[11px] text-neutral-400">Disabled</span>
-                    </>
-                  )}
-                </button>
-
-                <div className="flex items-center space-x-1.5">
+              {/* Right Controls */}
+              <div className="flex items-center justify-between lg:justify-end gap-4 pl-14 lg:pl-0 flex-shrink-0">
+                {isUserOwned ? (
                   <button
+                    type="button"
+                    onClick={() => handleToggle(agent.agent_id)}
+                    title={agent.enabled ? 'Click to disable' : 'Click to enable'}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold"
+                  >
+                    {agent.enabled ? (
+                      <>
+                        <ToggleRight className="w-5 h-5 text-statusSuccess" />
+                        <span className="text-[11px] text-statusSuccess">Enabled</span>
+                      </>
+                    ) : (
+                      <>
+                        <ToggleLeft className="w-5 h-5 text-cream-muted" />
+                        <span className="text-[11px] text-cream-muted">Disabled</span>
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <span className="text-[11px] font-medium text-statusSuccess">
+                    {agent.enabled ? 'Active' : 'Disabled'}
+                  </span>
+                )}
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
                     onClick={() => openHistory(agent)}
                     title="View execution history"
-                    className="p-1.5 rounded-lg border dark:border-charcoal-border border-cream-border hover:text-coral transition-colors"
+                    className="p-2 rounded-full border border-cream-border dark:border-charcoal-border hover:border-coral hover:text-coral transition-colors"
                   >
                     <History className="w-3.5 h-3.5" />
                   </button>
 
-                  <button
-                    onClick={() => {
-                      setTestingAgent(agent);
-                      setTestResult(null);
-                    }}
-                    title="Test Agent Independently"
-                    className="p-1.5 rounded-lg border dark:border-charcoal-border border-cream-border hover:text-coral transition-colors"
-                  >
-                    <Play className="w-3.5 h-3.5" />
-                  </button>
+                  {!['planner', 'critic'].includes(agent.agent_id) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTestingAgent(agent);
+                        setTestResult(null);
+                      }}
+                      title="Run isolated single-agent test"
+                      className="p-2 rounded-full border border-cream-border dark:border-charcoal-border hover:border-amberAccent hover:text-amberAccent transition-colors"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                    </button>
+                  )}
 
                   {!isBuiltIn && (
+                    <button
+                      type="button"
+                      onClick={() => handleDuplicate(agent.agent_id)}
+                      title="Duplicate as custom agent"
+                      className="p-2 rounded-full border border-cream-border dark:border-charcoal-border hover:border-coral hover:text-coral transition-colors"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  {isUserOwned && (
                     <>
                       <button
+                        type="button"
                         onClick={() => {
                           setEditingAgent(agent);
                           setView('builder');
                         }}
-                        title="Edit Agent"
-                        className="p-1.5 rounded-lg border dark:border-charcoal-border border-cream-border hover:text-coral transition-colors"
+                        title="Edit custom agent"
+                        className="p-2 rounded-full border border-cream-border dark:border-charcoal-border hover:border-coral hover:text-coral transition-colors"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
 
                       <button
-                        onClick={() => handleDuplicate(agent.agent_id)}
-                        title="Duplicate Agent"
-                        className="p-1.5 rounded-lg border dark:border-charcoal-border border-cream-border hover:text-coral transition-colors"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-
-                      <button
+                        type="button"
                         onClick={() => handleDelete(agent.agent_id)}
-                        title="Delete Agent"
-                        className="p-1.5 rounded-lg border dark:border-charcoal-border border-cream-border hover:text-red-500 transition-colors text-neutral-400"
+                        title="Delete custom agent"
+                        className="p-2 rounded-full border border-cream-border dark:border-charcoal-border hover:border-statusError hover:text-statusError transition-colors text-cream-muted"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -287,86 +298,84 @@ export const AgentsPage: React.FC = () => {
                   )}
                 </div>
               </div>
-
             </div>
           );
         })}
       </div>
 
-      {/* Agent Execution History Modal */}
+      {/* History Modal */}
       {historyAgent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b dark:border-charcoal-border border-cream-border">
-              <div className="flex items-center space-x-2">
-                <History className="w-5 h-5 text-coral" />
-                <h3 className="font-bold text-base">Execution history: {historyAgent.name}</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs">
+          <div className="w-full max-w-2xl rounded-2xl border bg-cream-surface border-cream-border dark:bg-charcoal-surface dark:border-charcoal-border shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-cream-border dark:border-charcoal-border">
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4 text-coral" />
+                <h3 className="font-bold text-sm">Execution History: {historyAgent.name}</h3>
               </div>
               <button
+                type="button"
                 onClick={() => setHistoryAgent(null)}
-                className="text-neutral-400 hover:text-neutral-200"
+                aria-label="Close history modal"
+                className="p-1.5 rounded-full hover:bg-cream-subtle dark:hover:bg-charcoal-subtle"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {historyLoading && (
-              <p className="text-xs dark:text-charcoal-muted text-cream-muted">
+              <p className="text-xs text-cream-muted dark:text-charcoal-muted">
                 Loading executions…
               </p>
             )}
             {historyError && (
-              <div className="p-3 rounded-xl border border-red-500/30 bg-red-500/5 text-red-500 text-xs flex items-center space-x-2">
+              <div className="pl-3 border-l-2 border-statusError text-statusError text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4" />
                 <span>{historyError}</span>
               </div>
             )}
             {!historyLoading && !historyError && historyItems.length === 0 && (
-              <p className="text-xs dark:text-charcoal-muted text-cream-muted">
-                No recorded executions for this agent yet. Run a goal that assigns it a task,
-                or use the isolated test.
+              <p className="text-xs text-cream-muted dark:text-charcoal-muted">
+                No recorded executions for this agent yet.
               </p>
             )}
 
             {historyItems.length > 0 && (
-              <div className="max-h-80 overflow-y-auto rounded-xl border dark:border-charcoal-border border-cream-border">
+              <div className="max-h-80 overflow-y-auto border-y border-cream-border dark:border-charcoal-border">
                 <table className="w-full text-left text-[11px]">
-                  <thead className="dark:bg-charcoal-bg bg-cream-bg text-[10px] uppercase tracking-wider dark:text-charcoal-muted text-cream-muted">
+                  <thead className="text-[10px] uppercase tracking-wider text-cream-muted dark:text-charcoal-muted border-b border-cream-border dark:border-charcoal-border">
                     <tr>
-                      <th className="py-2 px-3">Run / Goal</th>
+                      <th className="py-2 pr-3">Goal</th>
                       <th className="py-2 px-3">Task</th>
                       <th className="py-2 px-3">Status</th>
                       <th className="py-2 px-3">Thoughts</th>
                       <th className="py-2 px-3">Tools</th>
-                      <th className="py-2 px-3">Critic</th>
+                      <th className="py-2 pl-3">Score</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y dark:divide-charcoal-border divide-cream-border">
+                  <tbody className="divide-y divide-cream-border dark:divide-charcoal-border">
                     {historyItems.map((item, index) => (
                       <tr key={`${item.run_id}-${item.task_id}-${index}`}>
-                        <td className="py-2 px-3 max-w-[16rem]">
+                        <td className="py-2.5 pr-3 max-w-[16rem]">
                           <div className="font-semibold line-clamp-1">{item.goal}</div>
-                          <div className="font-mono text-[9px] dark:text-charcoal-muted text-cream-muted">
+                          <div className="font-mono text-[9px] text-cream-muted dark:text-charcoal-muted">
                             {item.run_id}
                           </div>
                         </td>
-                        <td className="py-2 px-3 font-mono">{item.task_id ?? '—'}</td>
-                        <td className="py-2 px-3">
+                        <td className="py-2.5 px-3 font-mono">{item.task_id ?? '—'}</td>
+                        <td className="py-2.5 px-3">
                           <span
-                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                               item.status === 'failed'
-                                ? 'bg-red-500/10 text-red-500'
-                                : item.status === 'completed'
-                                ? 'bg-emerald-500/10 text-emerald-500'
-                                : 'bg-coral/10 text-coral'
+                                ? 'bg-statusError/10 text-statusError'
+                                : 'bg-statusSuccess/10 text-statusSuccess'
                             }`}
                           >
                             {item.status}
                           </span>
                         </td>
-                        <td className="py-2 px-3 font-mono">{item.thoughts}</td>
-                        <td className="py-2 px-3 font-mono">{item.tool_calls}</td>
-                        <td className="py-2 px-3 font-mono">
+                        <td className="py-2.5 px-3 font-mono">{item.thoughts}</td>
+                        <td className="py-2.5 px-3 font-mono">{item.tool_calls}</td>
+                        <td className="py-2.5 pl-3 font-mono text-coral">
                           {item.critic_score != null ? `${item.critic_score}/10` : '—'}
                         </td>
                       </tr>
@@ -381,52 +390,58 @@ export const AgentsPage: React.FC = () => {
 
       {/* Test Agent Modal */}
       {testingAgent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-xl rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b dark:border-charcoal-border border-cream-border">
-              <div className="flex items-center space-x-2">
-                <Sparkles className="w-5 h-5 text-coral" />
-                <h3 className="font-bold text-base">Test Agent: {testingAgent.name}</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs">
+          <div className="w-full max-w-xl rounded-2xl border bg-cream-surface border-cream-border dark:bg-charcoal-surface dark:border-charcoal-border shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-cream-border dark:border-charcoal-border">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-coral" />
+                <h3 className="font-bold text-sm">Isolated Test: {testingAgent.name}</h3>
               </div>
-              <button onClick={() => setTestingAgent(null)} className="text-neutral-400 hover:text-neutral-200">✕</button>
+              <button
+                type="button"
+                onClick={() => setTestingAgent(null)}
+                aria-label="Close test modal"
+                className="p-1.5 rounded-full hover:bg-cream-subtle dark:hover:bg-charcoal-subtle"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <div className="space-y-2">
-              <label className="block text-xs font-bold uppercase tracking-wider">Test Instruction Prompt</label>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold">Test Task Prompt</label>
               <textarea
                 value={testPrompt}
                 onChange={(e) => setTestPrompt(e.target.value)}
                 rows={3}
-                className="w-full px-3 py-2 rounded-xl border text-xs dark:bg-charcoal-bg bg-cream-bg dark:border-charcoal-border border-cream-border"
+                className="w-full px-3 py-2 rounded-xl border text-xs bg-cream-bg dark:bg-charcoal-bg border-cream-border dark:border-charcoal-border"
               />
             </div>
 
             <div className="flex justify-end">
               <button
+                type="button"
                 onClick={handleRunTest}
                 disabled={isTesting}
-                className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-coral hover:bg-coral-hover text-white transition-all disabled:opacity-50"
+                className="h-9 px-5 rounded-full text-xs font-semibold bg-coral hover:bg-coral-hover text-white transition-colors disabled:opacity-50"
               >
-                {isTesting ? 'Executing...' : 'Run Independent Test'}
+                {isTesting ? 'Running Test…' : 'Run Isolated Test'}
               </button>
             </div>
 
             {testResult && (
-              <div className="p-4 rounded-xl border dark:border-charcoal-border border-cream-border dark:bg-charcoal-bg bg-cream-bg space-y-2 max-h-60 overflow-y-auto">
-                <span className="text-[10px] font-bold uppercase text-emerald-500">Test Execution Output:</span>
-                <p className="text-xs leading-relaxed font-mono">
-                  {testResult.result?.summary}
-                </p>
-                <div className="text-[10px] font-mono dark:text-charcoal-muted text-cream-muted pt-2 border-t dark:border-charcoal-border border-cream-border">
-                  Execution Duration: {testResult.result?.execution_duration}s
+              <div className="p-4 rounded-xl bg-cream-bg dark:bg-charcoal-bg border border-cream-border dark:border-charcoal-border space-y-2 max-h-60 overflow-y-auto">
+                <span className="text-[10px] font-bold uppercase text-statusSuccess">
+                  Test Output
+                </span>
+                <p className="text-xs leading-relaxed font-mono">{testResult.result?.summary}</p>
+                <div className="text-[10px] font-mono text-cream-muted dark:text-charcoal-muted pt-2 border-t border-cream-border dark:border-charcoal-border">
+                  Duration: {testResult.result?.execution_duration}s
                 </div>
               </div>
             )}
           </div>
         </div>
       )}
-
     </div>
   );
 };
-

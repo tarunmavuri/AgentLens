@@ -32,6 +32,7 @@ export interface TaskDefinition {
 
 export interface AgentDefinition {
   agent_id: string;
+  user_id?: string;
   name: string;
   description: string;
   role: string;
@@ -170,6 +171,9 @@ export interface PublicConfig {
   environment: string;
   llm_mode: 'gemini' | 'offline_simulation' | 'disabled';
   llm_configured: boolean;
+  auth_provider?: string;
+  auth_configured?: boolean;
+  cloudflare_team_domain?: string;
   default_model: string;
   allowed_models: string[];
   search_provider: string;

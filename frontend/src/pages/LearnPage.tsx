@@ -1,178 +1,207 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
 import { agentPlain, GLOSSARY, HOW_IT_WORKS } from '../lib/plain';
-import { ArrowRight, BookOpen, Sparkles, Users } from 'lucide-react';
-
-const fadeUp = {
-  initial: { opacity: 0, y: 18 },
-  whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true, amount: 0.2 },
-  transition: { duration: 0.45, ease: 'easeOut' as const },
-};
+import { ArrowRight, BookOpen, ExternalLink, ChevronDown } from 'lucide-react';
 
 export const LearnPage: React.FC = () => {
-  const { setView, agents } = useAppStore();
+  const { setView, agents, concepts, setEditingAgent } = useAppStore();
   const team = ['planner', 'researcher', 'coder', 'critic'];
 
   return (
-    <div className="max-w-5xl mx-auto px-5 py-10 space-y-14">
-      {/* Header */}
-      <motion.header {...fadeUp} className="space-y-4 text-center">
-        <span className="inline-flex items-center space-x-2 px-3 py-1 rounded-full border border-coral/30 bg-coral/5 text-[11px] font-bold uppercase tracking-[0.18em] text-coral">
-          <BookOpen className="w-3 h-3" />
-          <span>Start here · 3 minute read</span>
+    <div className="max-w-5xl mx-auto px-5 py-12 space-y-16">
+      {/* Editorial Header */}
+      <header className="space-y-4 border-b border-cream-border dark:border-charcoal-border pb-10">
+        <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-coral">
+          <BookOpen className="w-3.5 h-3.5" />
+          <span>Field Guide · Agentic AI Concepts</span>
         </span>
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">
-          How AgentLens works,{' '}
-          <span className="font-editorial italic font-normal text-coral">in plain words</span>
+        <h1 className="text-3xl sm:text-5xl font-bold tracking-tight leading-[1.1]">
+          How multi-agent systems work in{' '}
+          <span className="font-editorial italic font-normal text-coral">plain language.</span>
         </h1>
-        <p className="text-sm sm:text-base dark:text-charcoal-muted text-cream-muted max-w-2xl mx-auto leading-relaxed">
-          You ask one question. A small team of AI helpers divides the work, checks each other's
-          answers, and shows you every step. That's it — no jargon required.
+        <p className="text-sm sm:text-base text-cream-muted dark:text-charcoal-muted max-w-2xl leading-relaxed">
+          Instead of a single opaque model prompt, AgentLens coordinates specialized agents that
+          plan tasks, call sandboxed tools, critique each other&apos;s output, and log every step.
         </p>
-      </motion.header>
+      </header>
 
-      {/* Journey */}
+      {/* Orchestration Lifecycle — Horizontal Numbered Editorial Rail (No boxes!) */}
       <section className="space-y-6">
-        <h2 className="text-lg font-bold tracking-tight flex items-center space-x-2">
-          <Sparkles className="w-4 h-4 text-coral" />
-          <span>What happens when you press “Ask”</span>
-        </h2>
+        <div>
+          <span className="text-[11px] font-bold uppercase tracking-widest text-amberAccent">
+            01 · Lifecycle
+          </span>
+          <h2 className="text-xl font-bold mt-1">Five steps inside every execution</h2>
+        </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {HOW_IT_WORKS.map((step, index) => (
-            <motion.div
-              key={step.step}
-              initial={{ opacity: 0, y: 22 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.3 }}
-              transition={{ duration: 0.4, delay: index * 0.08, ease: 'easeOut' }}
-              className="relative p-5 rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border shadow-sm hover:-translate-y-1 transition-transform duration-200"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-2xl" aria-hidden="true">{step.emoji}</span>
-                <span className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full bg-coral/10 text-coral">
-                  Step {step.step}
+        <ol className="grid gap-8 sm:grid-cols-2 lg:grid-cols-5 border-t border-cream-border dark:border-charcoal-border pt-6">
+          {HOW_IT_WORKS.map((step) => (
+            <li key={step.step} className="space-y-2">
+              <div className="flex items-baseline gap-2">
+                <span className="font-editorial italic text-3xl text-coral leading-none">
+                  0{step.step}
+                </span>
+                <span aria-hidden="true" className="text-base">
+                  {step.emoji}
                 </span>
               </div>
-              <h3 className="font-bold text-sm tracking-tight">{step.title}</h3>
-              <p className="mt-1.5 text-xs dark:text-charcoal-muted text-cream-muted leading-relaxed">
+              <h3 className="font-bold text-sm">{step.title}</h3>
+              <p className="text-xs text-cream-muted dark:text-charcoal-muted leading-relaxed">
                 {step.plain}
               </p>
-            </motion.div>
+            </li>
           ))}
-        </div>
+        </ol>
       </section>
 
-      {/* Meet the team */}
+      {/* Built-in Team — Open Hairline Roster (No boxes!) */}
       <section className="space-y-6">
-        <div className="flex items-center space-x-2">
-          <Users className="w-4 h-4 text-coral" />
-          <h2 className="text-lg font-bold tracking-tight">Meet the built-in team</h2>
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-widest text-amberAccent">
+              02 · Specialists
+            </span>
+            <h2 className="text-xl font-bold mt-1">Built-in agent roles</h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingAgent(null);
+              setView('builder');
+            }}
+            className="text-xs font-semibold text-coral hover:underline inline-flex items-center gap-1"
+          >
+            <span>Build your own agent</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {team.map((id, index) => {
+        <div className="grid gap-x-10 gap-y-6 sm:grid-cols-2 border-t border-cream-border dark:border-charcoal-border pt-6">
+          {team.map((id) => {
             const definition = agents.find((agent) => agent.agent_id === id);
             const plain = agentPlain(id, definition?.role);
             return (
-              <motion.div
+              <div
                 key={id}
-                initial={{ opacity: 0, x: index % 2 === 0 ? -16 : 16 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, amount: 0.3 }}
-                transition={{ duration: 0.4, ease: 'easeOut' }}
-                className="flex items-start space-x-3 p-4 rounded-2xl border dark:bg-charcoal-surface dark:border-charcoal-border bg-cream-surface border-cream-border"
+                className="flex items-start gap-3.5 pb-4 border-b border-cream-border/70 dark:border-charcoal-border/70"
               >
-                <div className="w-10 h-10 flex-shrink-0 rounded-xl bg-coral/10 flex items-center justify-center text-lg">
-                  <span aria-hidden="true">{plain.emoji}</span>
-                </div>
+                <span
+                  aria-hidden="true"
+                  className="text-2xl leading-none mt-0.5 flex-shrink-0"
+                >
+                  {plain.emoji}
+                </span>
                 <div className="space-y-1">
                   <h3 className="font-bold text-sm">{plain.name}</h3>
-                  <p className="text-xs dark:text-charcoal-muted text-cream-muted leading-relaxed">
+                  <p className="text-xs text-cream-muted dark:text-charcoal-muted leading-relaxed">
                     {plain.does}
                   </p>
                 </div>
-              </motion.div>
+              </div>
             );
           })}
         </div>
-
-        <p className="text-xs dark:text-charcoal-muted text-cream-muted">
-          You can also add your own agent on the{' '}
-          <button onClick={() => setView('builder')} className="text-coral font-semibold hover:underline">
-            Build an Agent
-          </button>{' '}
-          page — pick a name, describe its job in a sentence, and choose which tools it may use.
-        </p>
       </section>
 
-      {/* Glossary */}
-      <section className="space-y-6">
+      {/* Live Engineering Patterns — Clean Two-Column Index (No boxes!) */}
+      {concepts.length > 0 && (
+        <section className="space-y-6">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-widest text-amberAccent">
+              03 · Architecture Patterns
+            </span>
+            <h2 className="text-xl font-bold mt-1">Engineering concepts behind the timeline</h2>
+            <p className="text-xs text-cream-muted dark:text-charcoal-muted mt-0.5">
+              Every step in the live event timeline links back to one of these patterns.
+            </p>
+          </div>
+
+          <div className="grid gap-x-10 gap-y-6 sm:grid-cols-2 border-t border-cream-border dark:border-charcoal-border pt-6">
+            {concepts.map((concept, idx) => (
+              <article
+                key={concept.id}
+                className="pl-4 border-l-2 border-cream-border dark:border-charcoal-border hover:border-coral transition-colors space-y-1.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="font-bold text-sm">{concept.title}</h3>
+                  <span className="text-[10px] font-mono text-cream-muted dark:text-charcoal-muted">
+                    0{idx + 1}
+                  </span>
+                </div>
+                <p className="text-xs text-cream-muted dark:text-charcoal-muted leading-relaxed">
+                  {concept.explanation}
+                </p>
+                <a
+                  href={concept.learn_more_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-coral hover:underline pt-0.5"
+                >
+                  <span>Read Paper / Spec</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Student Glossary — Clean Accordion Ledger */}
+      <section className="space-y-5">
         <div>
-          <h2 className="text-lg font-bold tracking-tight">Words you'll see around here</h2>
-          <p className="text-xs dark:text-charcoal-muted text-cream-muted mt-1">
-            You never need these to use AgentLens — but this is what they mean.
-          </p>
+          <span className="text-[11px] font-bold uppercase tracking-widest text-amberAccent">
+            04 · Vocabulary
+          </span>
+          <h2 className="text-xl font-bold mt-1">Student glossary</h2>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          {GLOSSARY.map((item, index) => (
-            <motion.details
-              key={item.term}
-              initial={{ opacity: 0, y: 14 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.2 }}
-              transition={{ duration: 0.35, delay: (index % 4) * 0.05 }}
-              className="group rounded-2xl border dark:border-charcoal-border border-cream-border dark:bg-charcoal-surface bg-cream-surface px-4 py-3 open:shadow-md transition-shadow"
-            >
+        <div className="divide-y divide-cream-border dark:divide-charcoal-border border-y border-cream-border dark:border-charcoal-border">
+          {GLOSSARY.map((item) => (
+            <details key={item.term} className="group py-3.5">
               <summary className="flex items-center justify-between cursor-pointer list-none">
-                <span className="flex items-center space-x-2 text-sm font-bold">
+                <span className="flex items-center gap-2.5 text-sm font-semibold">
                   <span aria-hidden="true">{item.emoji}</span>
-                  <span>{item.term}</span>
+                  <span className="group-open:text-coral transition-colors">{item.term}</span>
                 </span>
-                <span className="text-[10px] uppercase tracking-wider font-bold text-coral opacity-0 group-open:opacity-100 transition-opacity" aria-hidden="true">
-                  +/−
-                </span>
+                <ChevronDown className="w-4 h-4 text-cream-muted dark:text-charcoal-muted transition-transform group-open:rotate-180 group-open:text-coral" />
               </summary>
-              <p className="mt-2 text-xs leading-relaxed dark:text-charcoal-muted text-cream-muted">
-                {item.plain}
-              </p>
-              <p className="mt-1.5 text-[11px] italic text-coral/90">{item.example}</p>
-            </motion.details>
+              <div className="pl-7 pt-2 space-y-1">
+                <p className="text-xs leading-relaxed text-cream-muted dark:text-charcoal-muted">
+                  {item.plain}
+                </p>
+                <p className="text-[11px] font-medium text-amberAccent">{item.example}</p>
+              </div>
+            </details>
           ))}
         </div>
       </section>
 
-      {/* CTA */}
-      <motion.section
-        {...fadeUp}
-        className="rounded-2xl border border-coral/30 bg-coral/5 px-6 py-8 text-center space-y-4"
-      >
-        <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">
-          Ready to watch it happen?
-        </h2>
-        <p className="text-sm dark:text-charcoal-muted text-cream-muted max-w-lg mx-auto">
-          Open one of the demo runs and follow along step by step. Nothing to install, nothing to
-          configure.
-        </p>
-        <div className="flex flex-wrap justify-center gap-3">
+      {/* Open Editorial Footer CTA */}
+      <section className="pt-4 border-t border-cream-border dark:border-charcoal-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">Ready to watch a team run live?</h2>
+          <p className="text-xs text-cream-muted dark:text-charcoal-muted mt-0.5">
+            Explore recorded demo executions or launch a fresh experiment in the studio.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
           <button
+            type="button"
             onClick={() => setView('dashboard')}
-            className="px-6 py-3 rounded-full text-xs font-bold uppercase tracking-wider bg-coral hover:bg-coral-hover text-white shadow-lg shadow-coral/25 transition-transform hover:scale-[1.03] flex items-center space-x-2"
+            className="h-10 px-5 rounded-full text-xs font-semibold bg-coral hover:bg-coral-hover text-white shadow-sm shadow-coral/20 transition-colors inline-flex items-center gap-1.5"
           >
-            <span>See my runs</span>
+            <span>Open Overview</span>
             <ArrowRight className="w-4 h-4" />
           </button>
           <button
+            type="button"
             onClick={() => setView('workspace')}
-            className="px-6 py-3 rounded-full text-xs font-bold uppercase tracking-wider border dark:border-charcoal-border border-cream-border dark:bg-charcoal-surface bg-cream-surface transition-transform hover:scale-[1.03]"
+            className="h-10 px-5 rounded-full text-xs font-semibold border border-cream-border dark:border-charcoal-border hover:border-coral transition-colors"
           >
-            Watch a live run
+            Open Live Runs
           </button>
         </div>
-      </motion.section>
+      </section>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { Bot, CheckCircle2, Clock, AlertCircle, Wrench, ShieldAlert, Sparkles, RefreshCw } from 'lucide-react';
+import { Bot, CheckCircle2, AlertCircle, RefreshCw, Eye } from 'lucide-react';
 
 interface AgentNodeData {
   agent_id: string;
@@ -22,49 +22,49 @@ export const CustomAgentNode = memo(({ data }: { data: AgentNodeData }) => {
       case 'using_tool':
       case 'planning':
         return (
-          <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-coral text-white animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-coral text-white">
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
             <span>
               {data.status === 'using_tool'
-                ? 'Using a tool'
+                ? 'Using Tool'
                 : data.status === 'planning'
-                  ? 'Thinking'
-                  : 'Working'}
+                  ? 'Planning'
+                  : 'Running'}
             </span>
           </span>
         );
       case 'reviewing':
         return (
-          <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-purple-500 text-white">
-            <Sparkles className="w-2.5 h-2.5" />
-            <span>Checking</span>
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amberAccent text-white">
+            <Eye className="w-2.5 h-2.5" />
+            <span>Reviewing</span>
           </span>
         );
       case 'retrying':
         return (
-          <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-amberAccent text-white animate-bounce">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amberAccent/15 text-amberAccent border border-amberAccent/30">
             <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-            <span>Trying again</span>
+            <span>Retrying</span>
           </span>
         );
       case 'completed':
         return (
-          <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-statusSuccess/10 text-statusSuccess border border-statusSuccess/25">
             <CheckCircle2 className="w-2.5 h-2.5" />
-            <span>Finished</span>
+            <span>Done</span>
           </span>
         );
       case 'failed':
         return (
-          <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-red-500 text-white">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-statusError/10 text-statusError border border-statusError/25">
             <AlertCircle className="w-2.5 h-2.5" />
-            <span>Stuck</span>
+            <span>Failed</span>
           </span>
         );
       default:
         return (
-          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider dark:bg-charcoal-bg bg-cream-bg dark:text-charcoal-muted text-cream-muted border dark:border-charcoal-border border-cream-border">
-            {data.status === 'waiting' ? 'Waiting' : 'Not started'}
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cream-subtle dark:bg-charcoal-bg text-cream-muted dark:text-charcoal-muted border border-cream-border dark:border-charcoal-border">
+            {data.status === 'waiting' ? 'Queued' : 'Idle'}
           </span>
         );
     }
@@ -73,57 +73,73 @@ export const CustomAgentNode = memo(({ data }: { data: AgentNodeData }) => {
   const isActive = ['running', 'using_tool', 'planning', 'reviewing', 'retrying'].includes(data.status);
 
   return (
-    <div className={`w-72 rounded-2xl border p-4 transition-all duration-300 relative shadow-md
-      dark:bg-charcoal-surface dark:border-charcoal-border 
-      bg-cream-surface border-cream-border ${
-        isActive ? 'ring-2 ring-coral shadow-coral/20' : 'hover:border-coral/50'
-      } ${data.isSelected ? 'ring-2 ring-amberAccent' : ''}`}>
-      
-      {/* Node Input and Output Handles */}
-      <Handle type="target" position={Position.Top} className="!w-2 !h-2 !bg-coral !border-2 dark:!border-charcoal-surface !border-cream-surface" />
-      <Handle type="source" position={Position.Bottom} className="!w-2 !h-2 !bg-coral !border-2 dark:!border-charcoal-surface !border-cream-surface" />
+    <div
+      className={`w-72 rounded-2xl border overflow-hidden transition-all duration-200 relative shadow-sm
+        bg-cream-surface border-cream-border text-cream-text
+        dark:bg-charcoal-surface dark:border-charcoal-border dark:text-charcoal-text
+        ${isActive ? 'ring-2 ring-coral agent-active-pulse' : 'hover:border-coral/50'}
+        ${data.isSelected ? 'ring-2 ring-amberAccent border-amberAccent' : ''}`}
+    >
+      {/* Top 3px category stripe */}
+      <div
+        className={`h-1 w-full ${
+          data.category === 'custom' ? 'bg-amberAccent' : 'bg-coral'
+        }`}
+      />
 
-      {/* Header */}
-      <div className="flex items-center justify-between pb-2 border-b dark:border-charcoal-border border-cream-border">
-        <div className="flex items-center space-x-2">
-          <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
-            data.category === 'custom' ? 'bg-purple-500/10 text-purple-500' : 'bg-coral/10 text-coral'
-          }`}>
-            <Bot className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs tracking-tight">{data.name}</div>
-            <div className="text-[10px] dark:text-charcoal-muted text-cream-muted leading-none mt-0.5 font-medium">
-              {data.category === 'custom' ? 'Your agent' : 'Built-in'}
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!w-2.5 !h-2.5 !bg-coral !border-2 !border-cream-surface dark:!border-charcoal-surface"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!w-2.5 !h-2.5 !bg-amberAccent !border-2 !border-cream-surface dark:!border-charcoal-surface"
+      />
+
+      <div className="p-3.5 space-y-2.5">
+        <div className="flex items-center justify-between gap-2 pb-2 border-b border-cream-border dark:border-charcoal-border">
+          <div className="flex items-center gap-2 min-w-0">
+            <div
+              className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
+                data.category === 'custom'
+                  ? 'bg-amberAccent/15 text-amberAccent'
+                  : 'bg-coral/15 text-coral'
+              }`}
+            >
+              <Bot className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-bold text-xs tracking-tight truncate">{data.name}</div>
+              <div className="text-[10px] text-cream-muted dark:text-charcoal-muted">
+                {data.category === 'custom' ? 'Custom agent' : 'Built-in'}
+              </div>
             </div>
           </div>
+
+          {getStatusBadge()}
         </div>
 
-        {getStatusBadge()}
-      </div>
+        <div className="space-y-1 text-left">
+          <div className="text-[11px] font-semibold text-coral line-clamp-1">{data.role}</div>
+          <div className="text-[11px] text-cream-muted dark:text-charcoal-muted line-clamp-2 leading-relaxed">
+            {data.currentTaskTitle ? `Task: ${data.currentTaskTitle}` : 'Awaiting task assignment…'}
+          </div>
+        </div>
 
-      {/* Role & Task Info */}
-      <div className="py-2.5 space-y-1.5 text-left">
-        <div className="text-[11px] font-semibold text-coral line-clamp-1">{data.role}</div>
-        <div className="text-[11px] dark:text-charcoal-muted text-cream-muted line-clamp-2 leading-relaxed">
-          {data.currentTaskTitle ? `Job: ${data.currentTaskTitle}` : 'Waiting for a job…'}
+        <div className="pt-2 border-t border-cream-border dark:border-charcoal-border flex items-center justify-between text-[10px] font-mono text-cream-muted dark:text-charcoal-muted">
+          <span>{data.duration ? `${data.duration}s` : '—'}</span>
+          {!!data.retryCount && (
+            <span className="font-semibold text-amberAccent">Retries: {data.retryCount}</span>
+          )}
+          {data.criticScore !== undefined && (
+            <span className="font-semibold text-coral">Score: {data.criticScore}/10</span>
+          )}
         </div>
       </div>
-
-      {/* Footer Metrics */}
-      <div className="pt-2 border-t dark:border-charcoal-border border-cream-border flex items-center justify-between text-[10px] font-mono dark:text-charcoal-muted text-cream-muted">
-        <span>{data.duration ? `${data.duration}s` : '—'}</span>
-        {!!data.retryCount && (
-          <span className="font-bold text-amberAccent">Retries: {data.retryCount}</span>
-        )}
-        {data.criticScore !== undefined && (
-          <span className="font-bold text-coral">Score: {data.criticScore}/10</span>
-        )}
-      </div>
-
     </div>
   );
 });
 
 CustomAgentNode.displayName = 'CustomAgentNode';
-

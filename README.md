@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/agentlens-logo.svg" alt="AgentLens Logo" width="72" height="72" />
+
 # AGENTLENS
 
 **Build your own AI agent teams. Watch them collaborate. Understand every execution.**
@@ -300,22 +302,25 @@ AgentLens/
         │   ├── useAppStore.ts      # Runs, events, agents, replay, theme state
         │   └── useAuthStore.ts     # Cloudflare Access session & logout state
         ├── components/
-        │   ├── layout/             # Navbar (auth profile + sign out), Sidebar
+        │   ├── brand/              # AgentLensLogo geometric SVG mark & wordmark
+        │   ├── layout/             # Navbar (auth profile + theme toggle), collapsible Sidebar
         │   ├── graph/              # CustomAgentNode for React Flow
+        │   ├── ui/                 # Accessible InfoTooltip primitive
         │   ├── workspace/          # ActivityTimeline, AgentInspector, CoderLive, StoryFeed
         │   ├── NewRunModal.tsx     # Goal, budget, and fault-injection modal
         │   └── WhyModal.tsx        # Educational concept modal
         └── pages/
             ├── LandingPage.tsx
-            ├── LearnPage.tsx
+            ├── LearnPage.tsx       # Concepts, team roles & glossary
             ├── AuthPage.tsx        # Cloudflare Access session verification screen
-            ├── DashboardPage.tsx
+            ├── DashboardPage.tsx   # Overview dashboard
             ├── LiveWorkspacePage.tsx
+            ├── TemplatesPage.tsx   # Goal starters, cloneable agents & demo traces
             ├── AgentsPage.tsx
             ├── CustomAgentBuilderPage.tsx
             ├── EvaluationsPage.tsx
             ├── ReplayPage.tsx
-            └── SettingsPage.tsx
+            └── SettingsPage.tsx    # Account & Preferences
 ```
 
 ---
